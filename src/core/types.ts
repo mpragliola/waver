@@ -11,6 +11,7 @@ export interface WaverTheme {
   selectionColor: string;
   minimapOverlayColor: string;
   zeroLineColor: string;
+  rulerColor: string;
   fontFamily: string;
   /** When set, the component injects a Google Fonts stylesheet link for this family (deduped, loaded once). */
   googleFont?: GoogleFontSpec;
@@ -37,6 +38,9 @@ export interface SelectionRange {
 
 export type SelectionEdge = "start" | "end" | "body" | null;
 
+/** `"time"` — hh:mm:ss / mm:ss / ss(.ms) depending on wave duration. `"samples"` — raw sample index. */
+export type RulerTimeFormat = "time" | "samples";
+
 export interface WaverOptions {
   height: number;
   minimapHeightRatio: number;
@@ -44,6 +48,8 @@ export interface WaverOptions {
   showZeroLine: boolean;
   roundedCorners: boolean;
   showMinimap: boolean;
+  showRuler: boolean;
+  rulerTimeFormat: RulerTimeFormat;
 }
 
 export type WaverEventMap = {

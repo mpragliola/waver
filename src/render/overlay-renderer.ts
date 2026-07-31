@@ -19,7 +19,8 @@ export function renderCursor(
   ctx.globalAlpha = 1;
 }
 
-const EDGE_GLOW_WIDTH_PX = 28;
+const EDGE_GLOW_WIDTH_PX = 11;
+const EDGE_GLOW_PEAK_ALPHA = 0.35;
 
 export function renderSelection(
   ctx: CanvasRenderingContext2D,
@@ -27,7 +28,8 @@ export function renderSelection(
   zoom: ZoomState,
   theme: WaverTheme,
   height: number,
-  draggedEdge: "start" | "end" | null = null
+  accentEdge: "start" | "end" | null = null,
+  accentFade = 1
 ): void {
   const startX = sampleToPixel(selection.startSample, zoom);
   const endX = sampleToPixel(selection.endSample, zoom);
@@ -35,15 +37,14 @@ export function renderSelection(
   ctx.globalCompositeOperation = "screen";
   ctx.fillRect(startX, 0, endX - startX, height);
 
-  if (draggedEdge) {
-    const edgeX = draggedEdge === "start" ? startX : endX;
-    const towardSelection = draggedEdge === "start" ? 1 : -1;
-    const glow = ctx.createLinearGradient(edgeX - EDGE_GLOW_WIDTH_PX * towardSelection, 0, edgeX + EDGE_GLOW_WIDTH_PX * towardSelection, 0);
-    glow.addColorStop(0, withAlpha(theme.selectionColor, 0));
-    glow.addColorStop(0.5, withAlpha(theme.selectionColor, 0.9));
+  if (accentEdge && accentFade > 0) {
+    const edgeX = accentEdge === "start" ? startX : endX;
+    const inward = accentEdge === "start" ? 1 : -1;
+    const glow = ctx.createLinearGradient(edgeX, 0, edgeX + EDGE_GLOW_WIDTH_PX * inward, 0);
+    glow.addColorStop(0, withAlpha(theme.selectionColor, EDGE_GLOW_PEAK_ALPHA * accentFade));
     glow.addColorStop(1, withAlpha(theme.selectionColor, 0));
     ctx.fillStyle = glow;
-    ctx.fillRect(edgeX - EDGE_GLOW_WIDTH_PX, 0, EDGE_GLOW_WIDTH_PX * 2, height);
+    ctx.fillRect(Math.min(edgeX, edgeX + EDGE_GLOW_WIDTH_PX * inward), 0, EDGE_GLOW_WIDTH_PX, height);
   }
 
   ctx.globalCompositeOperation = "source-over";

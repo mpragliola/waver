@@ -14,6 +14,9 @@ import { renderWaveform } from "./render/waveform-renderer";
 /** Height (CSS px) of the seek ruler strip above the waveform. Fixed, not part of `height`'s ratio split. */
 const RULER_HEIGHT_PX = 16;
 
+/** Duration of the selection-edge accent glow's fade-in. */
+const ACCENT_FADE_MS = 150;
+
 const DEFAULT_OPTIONS: WaverOptions = {
   height: 200,
   minimapHeightRatio: 0.2,
@@ -47,6 +50,11 @@ export class WaverElement extends HTMLElement {
   private resizeObserver: ResizeObserver | null = null;
   private pointerController: PointerController;
   private audioEngine: AudioEngine | null = null;
+  private accentTarget: "start" | "end" | null = null;
+  private accentEdge: "start" | "end" | null = null;
+  private accentAlpha = 0;
+  private accentAnimFromAlpha = 0;
+  private accentAnimStart = 0;
   private raf: number | null = null;
 
   constructor() {
@@ -242,14 +250,20 @@ export class WaverElement extends HTMLElement {
 
     if (hasWave) {
       if (this.selection) {
-        renderSelection(
-        this.waveformCtx,
-        this.selection,
-        this.zoom,
-        this.theme,
-        waveHeight,
-        this.pointerController.getDraggedEdge()
-      );
+        const target = this.pointerController.getAccentEdge();
+        if (target !== this.accentTarget) {
+          this.accentTarget = target;
+          this.accentAnimFromAlpha = this.accentAlpha;
+          this.accentAnimStart = performance.now();
+          if (target) this.accentEdge = target;
+        }
+        const t = Math.min(1, (performance.now() - this.accentAnimStart) / ACCENT_FADE_MS);
+        this.accentAlpha = target
+          ? this.accentAnimFromAlpha + (1 - this.accentAnimFromAlpha) * t
+          : this.accentAnimFromAlpha * (1 - t);
+        if (t < 1) this.render();
+        else if (!target) this.accentEdge = null;
+        renderSelection(this.waveformCtx, this.selection, this.zoom, this.theme, waveHeight, this.accentEdge, this.accentAlpha);
       }
       renderCursor(this.waveformCtx, this.cursorSample, this.zoom, this.theme, waveHeight);
     }
@@ -281,11 +295,17 @@ export class WaverElement extends HTMLElement {
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerMove(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
+      this.render();
+    });
+    canvas.addEventListener("pointerleave", () => {
+      this.pointerController.clearHover();
+      this.render();
     });
     canvas.addEventListener("pointerup", (e) => {
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerUp(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
+      this.render();
     });
     canvas.addEventListener(
       "wheel",

@@ -27,6 +27,7 @@ export class PointerController {
   private lastClickTime = 0;
   private pointerDownX = 0;
   private didDrag = false;
+  private hoverEdge: "start" | "end" | null = null;
 
   constructor(callbacks: PointerControllerCallbacks) {
     this.callbacks = callbacks;
@@ -67,7 +68,14 @@ export class PointerController {
   }
 
   handlePointerMove(pixel: number): void {
-    if (!this.dragMode) return;
+    if (!this.dragMode) {
+      const zoom = this.callbacks.getZoom();
+      const selection = this.callbacks.getSelection();
+      const toPixel = (s: number) => sampleToPixel(s, zoom);
+      const edge = hitTestSelection(pixel, selection, toPixel);
+      this.hoverEdge = edge === "start" || edge === "end" ? edge : null;
+      return;
+    }
     if (Math.abs(pixel - this.pointerDownX) > 1) this.didDrag = true;
 
     const zoom = this.callbacks.getZoom();
@@ -108,9 +116,15 @@ export class PointerController {
     this.didDrag = false;
   }
 
-  /** Edge currently being drag-resized, if any — lets the renderer accent it. */
-  getDraggedEdge(): "start" | "end" | null {
-    return this.dragMode?.kind === "resize" ? this.dragMode.edge : null;
+  /** Clears hover state, e.g. when the pointer leaves the canvas. */
+  clearHover(): void {
+    this.hoverEdge = null;
+  }
+
+  /** Edge to accent in the renderer: the one being drag-resized, or hovered when idle. */
+  getAccentEdge(): "start" | "end" | null {
+    if (this.dragMode) return this.dragMode.kind === "resize" ? this.dragMode.edge : null;
+    return this.hoverEdge;
   }
 
   /** Cursor to show for the given pixel, reflecting the gesture that would start there. */

@@ -22,16 +22,10 @@ export function renderWaveform(
   ctx.fillStyle = theme.backgroundColor;
   ctx.fillRect(0, 0, width, height);
 
-  if (showZeroLine) {
-    ctx.strokeStyle = theme.zeroLineColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(midY) + 0.5);
-    ctx.lineTo(width, Math.round(midY) + 0.5);
-    ctx.stroke();
+  if (samples.length === 0 || width <= 0) {
+    if (showZeroLine) drawZeroLine(ctx, width, midY, theme.zeroLineColor);
+    return;
   }
-
-  if (samples.length === 0 || width <= 0) return;
 
   const peaks = computePeaks(samples, startSample, endSample, width);
   ctx.fillStyle = theme.waveformColor;
@@ -45,4 +39,15 @@ export function renderWaveform(
   }
   ctx.closePath();
   ctx.fill();
+
+  if (showZeroLine) drawZeroLine(ctx, width, midY, theme.zeroLineColor);
+}
+
+function drawZeroLine(ctx: CanvasRenderingContext2D, width: number, midY: number, color: string): void {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, Math.round(midY) + 0.5);
+  ctx.lineTo(width, Math.round(midY) + 0.5);
+  ctx.stroke();
 }
