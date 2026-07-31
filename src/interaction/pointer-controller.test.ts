@@ -65,6 +65,22 @@ describe("PointerController", () => {
     expect(selection).toEqual({ startSample: 600, endSample: 900 });
   });
 
+  it("moves the cursor on a plain click on a selection edge (no drag)", () => {
+    selection = { startSample: 500, endSample: 800 };
+    controller.handlePointerDown(50); // on start edge
+    controller.handlePointerUp(50);
+    expect(cursor).toBe(500);
+    expect(selection).toEqual({ startSample: 500, endSample: 800 }); // untouched
+  });
+
+  it("moves the cursor on a plain click inside the selection body (no drag)", () => {
+    selection = { startSample: 500, endSample: 800 };
+    controller.handlePointerDown(65);
+    controller.handlePointerUp(65);
+    expect(cursor).toBe(650);
+    expect(selection).toEqual({ startSample: 500, endSample: 800 }); // untouched
+  });
+
   it("reports crosshair cursor over empty waveform", () => {
     expect(controller.getHoverCursor(50)).toBe("crosshair");
   });

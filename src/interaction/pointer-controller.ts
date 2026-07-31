@@ -99,7 +99,7 @@ export class PointerController {
     const zoom = this.callbacks.getZoom();
     const total = this.callbacks.getTotalSamples();
 
-    if (!this.didDrag && this.dragMode?.kind === "create") {
+    if (!this.didDrag && this.dragMode !== null) {
       const sample = clampSample(pixelToSample(pixel, zoom), total);
       this.callbacks.setCursor(sample);
     }
