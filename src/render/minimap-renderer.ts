@@ -1,5 +1,6 @@
 import { computePeaks } from "../core/peaks";
 import type { WaverTheme, ZoomState } from "../core/types";
+import { drawPeakPath } from "./canvas-utils";
 
 export interface MinimapRenderOptions {
   width: number;
@@ -25,16 +26,7 @@ export function renderMinimap(
   if (samples.length > 0 && width > 0) {
     const peaks = computePeaks(samples, 0, samples.length, width);
     ctx.fillStyle = theme.waveformColor;
-    ctx.beginPath();
-    ctx.moveTo(0, midY - peaks[1] * midY);
-    for (let x = 0; x < width; x++) {
-      ctx.lineTo(x, midY - peaks[x * 2 + 1] * midY);
-    }
-    for (let x = width - 1; x >= 0; x--) {
-      ctx.lineTo(x, midY - peaks[x * 2] * midY);
-    }
-    ctx.closePath();
-    ctx.fill();
+    drawPeakPath(ctx, peaks, width, midY);
   }
 
   if (totalSamples <= 0) return;

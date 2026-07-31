@@ -1,4 +1,5 @@
-import { MIN_SAMPLES_PER_PIXEL } from "./peaks";
+import { clamp } from "./math";
+import { fullZoomSamplesPerPixel, MIN_SAMPLES_PER_PIXEL } from "./peaks";
 import type { ZoomState } from "./types";
 
 export interface ViewportConfig {
@@ -7,7 +8,7 @@ export interface ViewportConfig {
 }
 
 export function fullZoom(config: ViewportConfig): ZoomState {
-  const samplesPerPixel = config.pixelWidth > 0 ? config.totalSamples / config.pixelWidth : config.totalSamples;
+  const samplesPerPixel = fullZoomSamplesPerPixel(config.totalSamples, config.pixelWidth);
   return { samplesPerPixel: Math.max(samplesPerPixel, MIN_SAMPLES_PER_PIXEL), offsetSample: 0 };
 }
 
@@ -50,8 +51,4 @@ export function clampOffset(zoom: ZoomState, config: ViewportConfig): ZoomState 
   const visibleSamples = zoom.samplesPerPixel * config.pixelWidth;
   const maxOffset = Math.max(0, config.totalSamples - visibleSamples);
   return { ...zoom, offsetSample: clamp(zoom.offsetSample, 0, maxOffset) };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }

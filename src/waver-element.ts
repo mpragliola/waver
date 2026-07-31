@@ -18,8 +18,11 @@ const RULER_HEIGHT_PX = 20;
 /** Duration of the selection-edge accent glow's fade-in. */
 const ACCENT_FADE_MS = 150;
 
-/** Duration of the eased pan animation triggered by minimap clicks/drags. */
-const PAN_ANIM_MS = 220;
+/** Duration of the eased animation applied to every setZoom() change (pan and/or zoom level). */
+const ZOOM_ANIM_MS = 220;
+
+/** Wheel events closer together than this (ms) are treated as one continuous gesture and skip easing. */
+const WHEEL_GESTURE_GAP_MS = 120;
 
 function easeOutCubic(t: number): number {
   const inv = 1 - t;
@@ -27,7 +30,7 @@ function easeOutCubic(t: number): number {
 }
 
 const DEFAULT_OPTIONS: WaverOptions = {
-  height: 200,
+  height: 100,
   minimapHeightRatio: 0.2,
   theme: {},
   showZeroLine: false,
@@ -67,10 +70,11 @@ export class WaverElement extends HTMLElement {
   private accentAlpha = 0;
   private accentAnimFromAlpha = 0;
   private accentAnimStart = 0;
-  private panAnimActive = false;
-  private panAnimFrom = 0;
-  private panAnimTo = 0;
-  private panAnimStart = 0;
+  private zoomAnimActive = false;
+  private zoomAnimFrom: ZoomState = { samplesPerPixel: 1, offsetSample: 0 };
+  private zoomAnimTo: ZoomState = { samplesPerPixel: 1, offsetSample: 0 };
+  private zoomAnimStart = 0;
+  private lastWheelTime = 0;
   private raf: number | null = null;
 
   constructor() {
@@ -162,27 +166,25 @@ export class WaverElement extends HTMLElement {
     this.audioEngine?.toggle(this.cursorSample);
   }
 
-  setZoom(zoom: Partial<ZoomState>): void {
-    this.panAnimActive = false;
-    this.zoom = clampOffset({ ...this.zoom, ...zoom }, this.viewportConfig());
-    this.emit("waver:zoomchange", { zoom: this.zoom });
-    this.render();
-  }
-
-  /** Eases the viewport's offsetSample to the target over PAN_ANIM_MS; used by minimap clicks/drags. */
-  private animatePanTo(offsetSample: number): void {
-    const target = clampOffset({ ...this.zoom, offsetSample }, this.viewportConfig());
-    this.panAnimFrom = this.zoom.offsetSample;
-    this.panAnimTo = target.offsetSample;
-    this.panAnimStart = performance.now();
-    this.panAnimActive = true;
+  /** Sets the viewport. Eases to the target over ZOOM_ANIM_MS unless `animate` is false (e.g. active drags). */
+  setZoom(zoom: Partial<ZoomState>, animate = true): void {
+    const target = clampOffset({ ...this.zoom, ...zoom }, this.viewportConfig());
+    if (!animate) {
+      this.zoomAnimActive = false;
+      this.zoom = target;
+      this.emit("waver:zoomchange", { zoom: this.zoom });
+      this.render();
+      return;
+    }
+    this.zoomAnimFrom = this.zoom;
+    this.zoomAnimTo = target;
+    this.zoomAnimStart = performance.now();
+    this.zoomAnimActive = true;
     this.render();
   }
 
   zoomToFull(): void {
-    this.zoom = fullZoom(this.viewportConfig());
-    this.emit("waver:zoomchange", { zoom: this.zoom });
-    this.render();
+    this.setZoom(fullZoom(this.viewportConfig()));
   }
 
   setSelection(selection: SelectionRange | null): void {
@@ -265,13 +267,17 @@ export class WaverElement extends HTMLElement {
     const width = this.mainPixelWidth();
     if (width <= 0) return;
 
-    if (this.panAnimActive) {
-      const t = Math.min(1, (performance.now() - this.panAnimStart) / PAN_ANIM_MS);
-      const offsetSample = this.panAnimFrom + (this.panAnimTo - this.panAnimFrom) * easeOutCubic(t);
-      this.zoom = { ...this.zoom, offsetSample };
+    if (this.zoomAnimActive) {
+      const t = Math.min(1, (performance.now() - this.zoomAnimStart) / ZOOM_ANIM_MS);
+      const e = easeOutCubic(t);
+      this.zoom = {
+        offsetSample: this.zoomAnimFrom.offsetSample + (this.zoomAnimTo.offsetSample - this.zoomAnimFrom.offsetSample) * e,
+        samplesPerPixel:
+          this.zoomAnimFrom.samplesPerPixel + (this.zoomAnimTo.samplesPerPixel - this.zoomAnimFrom.samplesPerPixel) * e,
+      };
       this.emit("waver:zoomchange", { zoom: this.zoom });
       if (t < 1) this.render();
-      else this.panAnimActive = false;
+      else this.zoomAnimActive = false;
     }
 
     if (this.opts.showRuler) {
@@ -366,13 +372,15 @@ export class WaverElement extends HTMLElement {
       "wheel",
       (e) => {
         e.preventDefault();
-        this.zoom = applyWheel(
+        const next = applyWheel(
           this.zoom,
           { deltaY: e.deltaY, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, pivotPixel: this.pixelFromEvent(e) },
           this.viewportConfig()
         );
-        this.emit("waver:zoomchange", { zoom: this.zoom });
-        this.render();
+        const now = performance.now();
+        const isGesture = now - this.lastWheelTime < WHEEL_GESTURE_GAP_MS;
+        this.lastWheelTime = now;
+        this.setZoom(next, !isGesture);
       },
       { passive: false }
     );
@@ -402,24 +410,24 @@ export class WaverElement extends HTMLElement {
 
   private attachMinimapListeners(): void {
     const canvas = this.minimapCanvas;
-    const moveViewportTo = (pixel: number) => {
+    const moveViewportTo = (pixel: number, animate: boolean) => {
       const width = this.mainPixelWidth();
       const total = this.samples.length;
       if (width <= 0 || total <= 0) return;
       const centerSample = (pixel / width) * total;
       const visibleSamples = this.zoom.samplesPerPixel * width;
-      this.animatePanTo(centerSample - visibleSamples / 2);
+      this.setZoom({ offsetSample: centerSample - visibleSamples / 2 }, animate);
     };
 
     let dragging = false;
     canvas.addEventListener("pointerdown", (e) => {
       dragging = true;
       canvas.setPointerCapture(e.pointerId);
-      moveViewportTo(this.pixelFromEvent(e, canvas));
+      moveViewportTo(this.pixelFromEvent(e, canvas), true);
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!dragging) return;
-      moveViewportTo(this.pixelFromEvent(e, canvas));
+      moveViewportTo(this.pixelFromEvent(e, canvas), false);
     });
     canvas.addEventListener("pointerup", () => {
       dragging = false;
