@@ -12,7 +12,7 @@ describe("deriveSelectionColor", () => {
     expect(deriveSelectionColor("rgb(10, 20, 30)", 0.4)).toBe("rgba(10, 20, 30, 0.4)");
   });
   it("falls back to a default for unparseable colors", () => {
-    expect(deriveSelectionColor("not-a-color")).toBe("rgba(43, 108, 176, 0.25)");
+    expect(deriveSelectionColor("not-a-color")).toBe("rgba(43, 108, 176, 0.45)");
   });
 });
 
@@ -25,7 +25,7 @@ describe("resolveTheme", () => {
 
   it("derives selectionColor from an overridden waveformColor when selectionColor isn't also overridden", () => {
     const result = resolveTheme(darkTheme, { waveformColor: "#FF0000" });
-    expect(result.selectionColor).toBe("rgba(255, 0, 0, 0.25)");
+    expect(result.selectionColor).toBe("rgba(255, 0, 0, 0.45)");
   });
 
   it("keeps an explicit selectionColor override even when waveformColor also changes", () => {

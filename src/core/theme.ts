@@ -4,7 +4,7 @@ export const lightTheme: WaverTheme = {
   waveformColor: "#2B6CB0",
   backgroundColor: "#FFFFFF",
   cursorColor: "#1A202C",
-  selectionColor: "rgba(43, 108, 176, 0.25)",
+  selectionColor: "rgba(43, 108, 176, 0.45)",
   minimapOverlayColor: "rgba(0, 0, 0, 0.15)",
   zeroLineColor: "rgba(226, 232, 240, 0.9)",
   fontFamily: "'Google Sans', 'Segoe UI', sans-serif",
@@ -17,7 +17,7 @@ export const darkTheme: WaverTheme = {
   waveformColor: "#63B3ED",
   backgroundColor: "#1A202C",
   cursorColor: "#F7FAFC",
-  selectionColor: "rgba(99, 179, 237, 0.25)",
+  selectionColor: "rgba(99, 179, 237, 0.45)",
   minimapOverlayColor: "rgba(255, 255, 255, 0.15)",
   zeroLineColor: "rgba(45, 55, 72, 0.9)",
   fontFamily: "'Google Sans', 'Segoe UI', sans-serif",
@@ -27,9 +27,14 @@ export const darkTheme: WaverTheme = {
 };
 
 /** Derives a translucent selection color from a solid waveform color when the caller does not override it. */
-export function deriveSelectionColor(waveformColor: string, alpha = 0.25): string {
-  const rgb = parseColorToRgb(waveformColor);
-  if (!rgb) return `rgba(43, 108, 176, ${alpha})`;
+export function deriveSelectionColor(waveformColor: string, alpha = 0.45): string {
+  return withAlpha(waveformColor, alpha, "rgba(43, 108, 176, ALPHA)");
+}
+
+/** Re-expresses any hex or rgb(a) color string at the given alpha; falls back to `fallback` (with ALPHA substituted) if unparseable. */
+export function withAlpha(color: string, alpha: number, fallback = "rgba(0, 0, 0, ALPHA)"): string {
+  const rgb = parseColorToRgb(color);
+  if (!rgb) return fallback.replace("ALPHA", String(alpha));
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 

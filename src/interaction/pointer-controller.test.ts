@@ -65,6 +65,23 @@ describe("PointerController", () => {
     expect(selection).toEqual({ startSample: 600, endSample: 900 });
   });
 
+  it("reports crosshair cursor over empty waveform", () => {
+    expect(controller.getHoverCursor(50)).toBe("crosshair");
+  });
+
+  it("reports ew-resize cursor over a selection edge", () => {
+    selection = { startSample: 500, endSample: 800 };
+    expect(controller.getHoverCursor(50)).toBe("ew-resize");
+  });
+
+  it("reports grab cursor over a selection body, grabbing while moving it", () => {
+    selection = { startSample: 500, endSample: 800 };
+    expect(controller.getHoverCursor(65)).toBe("grab");
+    controller.handlePointerDown(65);
+    controller.handlePointerMove(70);
+    expect(controller.getHoverCursor(70)).toBe("grabbing");
+  });
+
   it("clears the selection on double-click within it", () => {
     selection = { startSample: 500, endSample: 800 };
     const now = Date.now;

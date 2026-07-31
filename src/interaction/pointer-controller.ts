@@ -8,15 +8,11 @@ export interface PointerControllerCallbacks {
   getTotalSamples: () => number;
   setSelection: (selection: SelectionRange | null) => void;
   setCursor: (sample: number) => void;
-  /**
-   * Invoked on a plain click (no drag) on empty waveform, with the clicked sample position.
-   * Replaces the default `setCursor` call for this gesture so the host can decide whether to
-   * reposition the cursor (starting playback) or leave it in place (stopping playback).
-   */
-  onPlaybackToggleClick?: (sample: number) => void;
 }
 
 const DOUBLE_CLICK_MS = 350;
+
+export type HoverCursor = "crosshair" | "ew-resize" | "grab" | "grabbing";
 
 type DragMode = { kind: "resize"; edge: "start" | "end" } | { kind: "move"; grabOffsetSamples: number } | { kind: "create"; anchorSample: number };
 
@@ -105,14 +101,30 @@ export class PointerController {
 
     if (!this.didDrag && this.dragMode?.kind === "create") {
       const sample = clampSample(pixelToSample(pixel, zoom), total);
-      if (this.callbacks.onPlaybackToggleClick) {
-        this.callbacks.onPlaybackToggleClick(sample);
-      } else {
-        this.callbacks.setCursor(sample);
-      }
+      this.callbacks.setCursor(sample);
     }
 
     this.dragMode = null;
     this.didDrag = false;
+  }
+
+  /** Edge currently being drag-resized, if any — lets the renderer accent it. */
+  getDraggedEdge(): "start" | "end" | null {
+    return this.dragMode?.kind === "resize" ? this.dragMode.edge : null;
+  }
+
+  /** Cursor to show for the given pixel, reflecting the gesture that would start there. */
+  getHoverCursor(pixel: number): HoverCursor {
+    if (this.dragMode?.kind === "move") return "grabbing";
+    if (this.dragMode?.kind === "resize") return "ew-resize";
+
+    const zoom = this.callbacks.getZoom();
+    const selection = this.callbacks.getSelection();
+    const toPixel = (s: number) => sampleToPixel(s, zoom);
+    const edge = hitTestSelection(pixel, selection, toPixel);
+
+    if (edge === "start" || edge === "end") return "ew-resize";
+    if (edge === "body") return "grab";
+    return "crosshair";
   }
 }

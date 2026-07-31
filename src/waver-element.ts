@@ -11,6 +11,9 @@ import { renderMinimap } from "./render/minimap-renderer";
 import { renderCursor, renderSelection } from "./render/overlay-renderer";
 import { renderWaveform } from "./render/waveform-renderer";
 
+/** Height (CSS px) of the seek ruler strip above the waveform. Fixed, not part of `height`'s ratio split. */
+const RULER_HEIGHT_PX = 16;
+
 const DEFAULT_OPTIONS: WaverOptions = {
   height: 200,
   minimapHeightRatio: 0.2,
@@ -27,6 +30,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
 export class WaverElement extends HTMLElement {
   private shadow: ShadowRoot;
   private container: HTMLDivElement;
+  private rulerEl: HTMLDivElement;
   private waveformCanvas: HTMLCanvasElement;
   private minimapCanvas: HTMLCanvasElement;
   private waveformCtx: CanvasRenderingContext2D | null = null;
@@ -52,12 +56,15 @@ export class WaverElement extends HTMLElement {
     this.container = document.createElement("div");
     this.container.className = "waver-container";
 
+    this.rulerEl = document.createElement("div");
+    this.rulerEl.className = "waver-ruler";
+
     this.waveformCanvas = document.createElement("canvas");
     this.waveformCanvas.className = "waver-waveform";
     this.minimapCanvas = document.createElement("canvas");
     this.minimapCanvas.className = "waver-minimap";
 
-    this.container.append(this.waveformCanvas, this.minimapCanvas);
+    this.container.append(this.rulerEl, this.waveformCanvas, this.minimapCanvas);
     this.shadow.append(styleSheet(), this.container);
 
     this.pointerController = new PointerController({
@@ -65,17 +72,10 @@ export class WaverElement extends HTMLElement {
       getSelection: () => this.selection,
       getTotalSamples: () => this.samples.length,
       setSelection: (s) => this.setSelection(s),
-      setCursor: (sample) => this.setCursorPosition(sample),
-      onPlaybackToggleClick: (sample) => {
-        if (this.audioEngine?.playbackState === "playing") {
-          this.audioEngine.stop();
-        } else {
-          this.setCursorPosition(sample);
-          this.audioEngine?.play(sample);
-        }
-      },
+      setCursor: (sample) => this.seekTo(sample),
     });
 
+    this.attachRulerListeners();
     this.attachWaveformListeners();
     this.attachMinimapListeners();
   }
@@ -163,6 +163,14 @@ export class WaverElement extends HTMLElement {
     this.render();
   }
 
+  /** Moves the cursor, restarting playback from the new position if already playing (a seek). */
+  private seekTo(sample: number): void {
+    this.setCursorPosition(sample);
+    if (this.audioEngine?.playbackState === "playing") {
+      this.audioEngine.play(this.cursorSample);
+    }
+  }
+
   getSelection(): SelectionRange | null {
     return this.selection;
   }
@@ -190,7 +198,7 @@ export class WaverElement extends HTMLElement {
   }
 
   private mainPixelHeight(): number {
-    const total = this.opts.height;
+    const total = this.opts.height - RULER_HEIGHT_PX;
     return this.opts.showMinimap ? total * (1 - this.opts.minimapHeightRatio) : total;
   }
 
@@ -234,7 +242,14 @@ export class WaverElement extends HTMLElement {
 
     if (hasWave) {
       if (this.selection) {
-        renderSelection(this.waveformCtx, this.selection, this.zoom, this.theme, waveHeight);
+        renderSelection(
+        this.waveformCtx,
+        this.selection,
+        this.zoom,
+        this.theme,
+        waveHeight,
+        this.pointerController.getDraggedEdge()
+      );
       }
       renderCursor(this.waveformCtx, this.cursorSample, this.zoom, this.theme, waveHeight);
     }
@@ -260,12 +275,17 @@ export class WaverElement extends HTMLElement {
     canvas.addEventListener("pointerdown", (e) => {
       canvas.setPointerCapture(e.pointerId);
       this.pointerController.handlePointerDown(this.pixelFromEvent(e));
+      canvas.style.cursor = this.pointerController.getHoverCursor(this.pixelFromEvent(e));
     });
     canvas.addEventListener("pointermove", (e) => {
-      this.pointerController.handlePointerMove(this.pixelFromEvent(e));
+      const pixel = this.pixelFromEvent(e);
+      this.pointerController.handlePointerMove(pixel);
+      canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
     });
     canvas.addEventListener("pointerup", (e) => {
-      this.pointerController.handlePointerUp(this.pixelFromEvent(e));
+      const pixel = this.pixelFromEvent(e);
+      this.pointerController.handlePointerUp(pixel);
+      canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
     });
     canvas.addEventListener(
       "wheel",
@@ -281,6 +301,28 @@ export class WaverElement extends HTMLElement {
       },
       { passive: false }
     );
+  }
+
+  private attachRulerListeners(): void {
+    const el = this.rulerEl;
+    const seekTo = (pixel: number) => {
+      const sample = Math.round(this.zoom.offsetSample + pixel * this.zoom.samplesPerPixel);
+      this.seekTo(Math.max(0, Math.min(sample, this.samples.length)));
+    };
+
+    let dragging = false;
+    el.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      el.setPointerCapture(e.pointerId);
+      seekTo(this.pixelFromEvent(e, el));
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      seekTo(this.pixelFromEvent(e, el));
+    });
+    el.addEventListener("pointerup", () => {
+      dragging = false;
+    });
   }
 
   private attachMinimapListeners(): void {
@@ -325,7 +367,8 @@ function styleSheet(): HTMLStyleElement {
     :host { display: block; width: 100%; }
     .waver-container { display: flex; flex-direction: column; overflow: hidden; user-select: none; touch-action: none; }
     canvas { display: block; width: 100%; }
-    .waver-waveform { cursor: text; }
+    .waver-ruler { height: ${RULER_HEIGHT_PX}px; flex: 0 0 auto; cursor: pointer; background: rgba(128, 128, 128, 0.12); }
+    .waver-waveform { cursor: crosshair; }
     .waver-minimap { cursor: pointer; }
   `;
   return style;
