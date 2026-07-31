@@ -9,13 +9,22 @@ import { applyWheel } from "./interaction/wheel-controller";
 import { setupHiDPICanvas } from "./render/canvas-utils";
 import { renderMinimap } from "./render/minimap-renderer";
 import { renderCursor, renderSelection } from "./render/overlay-renderer";
+import { renderRuler } from "./render/ruler-renderer";
 import { renderWaveform } from "./render/waveform-renderer";
 
 /** Height (CSS px) of the seek ruler strip above the waveform. Fixed, not part of `height`'s ratio split. */
-const RULER_HEIGHT_PX = 16;
+const RULER_HEIGHT_PX = 20;
 
 /** Duration of the selection-edge accent glow's fade-in. */
 const ACCENT_FADE_MS = 150;
+
+/** Duration of the eased pan animation triggered by minimap clicks/drags. */
+const PAN_ANIM_MS = 220;
+
+function easeOutCubic(t: number): number {
+  const inv = 1 - t;
+  return 1 - inv * inv * inv;
+}
 
 const DEFAULT_OPTIONS: WaverOptions = {
   height: 200,
@@ -24,6 +33,8 @@ const DEFAULT_OPTIONS: WaverOptions = {
   showZeroLine: false,
   roundedCorners: true,
   showMinimap: true,
+  showRuler: true,
+  rulerTimeFormat: "time",
 };
 
 /**
@@ -33,9 +44,10 @@ const DEFAULT_OPTIONS: WaverOptions = {
 export class WaverElement extends HTMLElement {
   private shadow: ShadowRoot;
   private container: HTMLDivElement;
-  private rulerEl: HTMLDivElement;
+  private rulerCanvas: HTMLCanvasElement;
   private waveformCanvas: HTMLCanvasElement;
   private minimapCanvas: HTMLCanvasElement;
+  private rulerCtx: CanvasRenderingContext2D | null = null;
   private waveformCtx: CanvasRenderingContext2D | null = null;
   private minimapCtx: CanvasRenderingContext2D | null = null;
 
@@ -55,6 +67,10 @@ export class WaverElement extends HTMLElement {
   private accentAlpha = 0;
   private accentAnimFromAlpha = 0;
   private accentAnimStart = 0;
+  private panAnimActive = false;
+  private panAnimFrom = 0;
+  private panAnimTo = 0;
+  private panAnimStart = 0;
   private raf: number | null = null;
 
   constructor() {
@@ -64,15 +80,15 @@ export class WaverElement extends HTMLElement {
     this.container = document.createElement("div");
     this.container.className = "waver-container";
 
-    this.rulerEl = document.createElement("div");
-    this.rulerEl.className = "waver-ruler";
+    this.rulerCanvas = document.createElement("canvas");
+    this.rulerCanvas.className = "waver-ruler";
 
     this.waveformCanvas = document.createElement("canvas");
     this.waveformCanvas.className = "waver-waveform";
     this.minimapCanvas = document.createElement("canvas");
     this.minimapCanvas.className = "waver-minimap";
 
-    this.container.append(this.rulerEl, this.waveformCanvas, this.minimapCanvas);
+    this.container.append(this.rulerCanvas, this.waveformCanvas, this.minimapCanvas);
     this.shadow.append(styleSheet(), this.container);
 
     this.pointerController = new PointerController({
@@ -147,8 +163,19 @@ export class WaverElement extends HTMLElement {
   }
 
   setZoom(zoom: Partial<ZoomState>): void {
+    this.panAnimActive = false;
     this.zoom = clampOffset({ ...this.zoom, ...zoom }, this.viewportConfig());
     this.emit("waver:zoomchange", { zoom: this.zoom });
+    this.render();
+  }
+
+  /** Eases the viewport's offsetSample to the target over PAN_ANIM_MS; used by minimap clicks/drags. */
+  private animatePanTo(offsetSample: number): void {
+    const target = clampOffset({ ...this.zoom, offsetSample }, this.viewportConfig());
+    this.panAnimFrom = this.zoom.offsetSample;
+    this.panAnimTo = target.offsetSample;
+    this.panAnimStart = performance.now();
+    this.panAnimActive = true;
     this.render();
   }
 
@@ -205,8 +232,12 @@ export class WaverElement extends HTMLElement {
     return this.container.clientWidth || this.clientWidth || 0;
   }
 
+  private rulerPixelHeight(): number {
+    return this.opts.showRuler ? RULER_HEIGHT_PX : 0;
+  }
+
   private mainPixelHeight(): number {
-    const total = this.opts.height - RULER_HEIGHT_PX;
+    const total = this.opts.height - this.rulerPixelHeight();
     return this.opts.showMinimap ? total * (1 - this.opts.minimapHeightRatio) : total;
   }
 
@@ -233,6 +264,30 @@ export class WaverElement extends HTMLElement {
   private renderNow(): void {
     const width = this.mainPixelWidth();
     if (width <= 0) return;
+
+    if (this.panAnimActive) {
+      const t = Math.min(1, (performance.now() - this.panAnimStart) / PAN_ANIM_MS);
+      const offsetSample = this.panAnimFrom + (this.panAnimTo - this.panAnimFrom) * easeOutCubic(t);
+      this.zoom = { ...this.zoom, offsetSample };
+      this.emit("waver:zoomchange", { zoom: this.zoom });
+      if (t < 1) this.render();
+      else this.panAnimActive = false;
+    }
+
+    if (this.opts.showRuler) {
+      this.rulerCanvas.style.display = "block";
+      const rulerHeight = RULER_HEIGHT_PX;
+      this.rulerCtx = setupHiDPICanvas(this.rulerCanvas, width, rulerHeight);
+      renderRuler(this.rulerCtx, this.zoom, this.theme, {
+        width,
+        height: rulerHeight,
+        sampleRate: this.sampleRate,
+        totalSamples: this.samples.length,
+        format: this.opts.rulerTimeFormat,
+      });
+    } else {
+      this.rulerCanvas.style.display = "none";
+    }
 
     const waveHeight = this.mainPixelHeight();
     this.waveformCtx = setupHiDPICanvas(this.waveformCanvas, width, waveHeight);
@@ -324,7 +379,7 @@ export class WaverElement extends HTMLElement {
   }
 
   private attachRulerListeners(): void {
-    const el = this.rulerEl;
+    const el = this.rulerCanvas;
     const seekTo = (pixel: number) => {
       const sample = Math.round(this.zoom.offsetSample + pixel * this.zoom.samplesPerPixel);
       this.seekTo(Math.max(0, Math.min(sample, this.samples.length)));
@@ -353,7 +408,7 @@ export class WaverElement extends HTMLElement {
       if (width <= 0 || total <= 0) return;
       const centerSample = (pixel / width) * total;
       const visibleSamples = this.zoom.samplesPerPixel * width;
-      this.setZoom({ offsetSample: centerSample - visibleSamples / 2 });
+      this.animatePanTo(centerSample - visibleSamples / 2);
     };
 
     let dragging = false;
@@ -387,7 +442,7 @@ function styleSheet(): HTMLStyleElement {
     :host { display: block; width: 100%; }
     .waver-container { display: flex; flex-direction: column; overflow: hidden; user-select: none; touch-action: none; }
     canvas { display: block; width: 100%; }
-    .waver-ruler { height: ${RULER_HEIGHT_PX}px; flex: 0 0 auto; cursor: pointer; background: rgba(128, 128, 128, 0.12); }
+    .waver-ruler { flex: 0 0 auto; cursor: pointer; }
     .waver-waveform { cursor: crosshair; }
     .waver-minimap { cursor: pointer; }
   `;
