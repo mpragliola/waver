@@ -1,3 +1,4 @@
+import { clamp } from "./math";
 import type { SelectionEdge, SelectionRange } from "./types";
 
 /** Pixel tolerance (CSS px) around a selection border that still counts as an edge-drag hit. */
@@ -55,5 +56,5 @@ export function translateSelection(
 }
 
 export function clampSample(sample: number, totalSamples: number): number {
-  return Math.min(Math.max(sample, 0), totalSamples);
+  return clamp(sample, 0, totalSamples);
 }
