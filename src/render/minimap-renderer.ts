@@ -1,6 +1,8 @@
 import type { WaverTheme, ZoomState } from "../core/types";
 import { drawPeakPath } from "./canvas-utils";
 
+const MINIMAP_WAVEFORM_COLOR = "#808080";
+
 export interface MinimapRenderOptions {
   width: number;
   height: number;
@@ -27,7 +29,7 @@ export function renderMinimap(
   ctx.fillRect(0, 0, width, height);
 
   if (peaks && width > 0) {
-    ctx.fillStyle = theme.waveformColor;
+    ctx.fillStyle = MINIMAP_WAVEFORM_COLOR;
     drawPeakPath(ctx, peaks, width, midY);
   }
 

@@ -22,7 +22,7 @@ export function drawPeakPath(ctx: CanvasRenderingContext2D, peaks: Float32Array,
  * waveform visible at single-sample resolution. Caller sets `strokeStyle` beforehand.
  */
 export function drawPeakLine(ctx: CanvasRenderingContext2D, peaks: Float32Array, width: number, midY: number): void {
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 0.8;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   ctx.beginPath();

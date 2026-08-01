@@ -36,7 +36,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   showMinimap: true,
   showRuler: true,
   rulerTimeFormat: "time",
-  rulerHeight: 20,
+  rulerHeight: 16,
 };
 
 /**

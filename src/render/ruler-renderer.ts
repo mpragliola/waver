@@ -3,7 +3,8 @@ import { pixelToSample, sampleToPixel } from "../core/viewport";
 
 const BACKGROUND_COLOR = "rgba(128, 128, 128, 0.12)";
 const TICK_HEIGHT_PX = 5;
-const FONT_SIZE_PX = 10;
+const FONT_SIZE_PX = 8;
+const LABEL_TOP_MARGIN_PX = 2;
 const MIN_LABEL_SPACING_PX = 70;
 
 export interface RulerRenderOptions {
@@ -36,6 +37,7 @@ export function renderRuler(
   ctx.fillStyle = theme.rulerColor;
   ctx.font = `${FONT_SIZE_PX}px ${theme.fontFamily}`;
   ctx.textBaseline = "top";
+  ctx.textAlign = "center";
   ctx.lineWidth = 1;
 
   if (format === "samples") {
@@ -70,7 +72,7 @@ function drawTicks(
     ctx.moveTo(Math.round(x) + 0.5, height - TICK_HEIGHT_PX);
     ctx.lineTo(Math.round(x) + 0.5, height);
     ctx.stroke();
-    ctx.fillText(labelFor(sample), x + 3, 1);
+    ctx.fillText(labelFor(sample), Math.round(x), LABEL_TOP_MARGIN_PX);
   }
 }
 
