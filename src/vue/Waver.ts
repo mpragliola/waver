@@ -1,5 +1,5 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from "vue";
-import type { SelectionRange, WaverOptions, ZoomState } from "../core/types";
+import type { RulerTimeFormat, SelectionRange, WaverOptions, ZoomState } from "../core/types";
 import { defineWaverElement, type WaverElement } from "../waver-element";
 
 defineWaverElement();
@@ -8,12 +8,15 @@ defineWaverElement();
 export const Waver = defineComponent({
   name: "Waver",
   props: {
-    height: { type: Number as PropType<number>, default: undefined },
+    height: { type: [Number, String] as PropType<WaverOptions["height"]>, default: undefined },
     minimapHeightRatio: { type: Number as PropType<number>, default: undefined },
     theme: { type: Object as PropType<WaverOptions["theme"]>, default: undefined },
     showZeroLine: { type: Boolean as PropType<boolean>, default: undefined },
     roundedCorners: { type: Boolean as PropType<boolean>, default: undefined },
     showMinimap: { type: Boolean as PropType<boolean>, default: undefined },
+    showRuler: { type: Boolean as PropType<boolean>, default: undefined },
+    rulerTimeFormat: { type: String as PropType<RulerTimeFormat>, default: undefined },
+    rulerHeight: { type: Number as PropType<number>, default: undefined },
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
@@ -56,6 +59,9 @@ export const Waver = defineComponent({
       if (props.showZeroLine !== undefined) opts.showZeroLine = props.showZeroLine;
       if (props.roundedCorners !== undefined) opts.roundedCorners = props.roundedCorners;
       if (props.showMinimap !== undefined) opts.showMinimap = props.showMinimap;
+      if (props.showRuler !== undefined) opts.showRuler = props.showRuler;
+      if (props.rulerTimeFormat !== undefined) opts.rulerTimeFormat = props.rulerTimeFormat;
+      if (props.rulerHeight !== undefined) opts.rulerHeight = props.rulerHeight;
       return opts;
     }
 

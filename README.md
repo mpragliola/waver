@@ -109,9 +109,9 @@ waverRef.value?.play();
 </script>
 ```
 
-Note: the Vue wrapper currently exposes a subset of props directly (`height`, `minimapHeightRatio`,
-`theme`, `showZeroLine`, `roundedCorners`, `showMinimap`) — `showRuler` and `rulerTimeFormat` can
-still be set via `element.value?.configure({ showRuler: false })`.
+Note: the Vue wrapper exposes every `WaverOptions` prop directly (`height`, `minimapHeightRatio`,
+`theme`, `showZeroLine`, `roundedCorners`, `showMinimap`, `showRuler`, `rulerTimeFormat`,
+`rulerHeight`) — or set any of them imperatively via `element.value?.configure({ showRuler: false })`.
 
 ## Configurable options (`WaverOptions`)
 
@@ -128,6 +128,7 @@ defaults.
 | `showMinimap` | `boolean` | `true` | Show/hide the minimap strip. |
 | `showRuler` | `boolean` | `true` | Show/hide the seek ruler strip above the waveform. |
 | `rulerTimeFormat` | `"time" \| "samples"` | `"time"` | Ruler labels as hh:mm:ss/mm:ss/ss or raw sample index. |
+| `rulerHeight` | `number` | `20` | Height (px) of the ruler strip. |
 
 ### Theme (`WaverTheme`)
 
