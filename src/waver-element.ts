@@ -47,10 +47,13 @@ export class WaverElement extends HTMLElement {
   private shadow: ShadowRoot;
   private container: HTMLDivElement;
   private rulerCanvas: HTMLCanvasElement;
+  private waveStack: HTMLDivElement;
   private waveformCanvas: HTMLCanvasElement;
+  private overlayCanvas: HTMLCanvasElement;
   private minimapCanvas: HTMLCanvasElement;
   private rulerCtx: CanvasRenderingContext2D | null = null;
   private waveformCtx: CanvasRenderingContext2D | null = null;
+  private overlayCtx: CanvasRenderingContext2D | null = null;
   private minimapCtx: CanvasRenderingContext2D | null = null;
 
   private samples: Float32Array = new Float32Array(0);
@@ -81,6 +84,17 @@ export class WaverElement extends HTMLElement {
   private readonly getWaveformPeaks = createPeaksCache();
   private readonly getMinimapPeaks = createPeaksCache();
 
+  /**
+   * Identity of the last drawn waveform layer (background + peak path + zero line). Cursor,
+   * selection, and the hover line live on `overlayCanvas` instead and repaint every frame, so the
+   * (comparatively expensive) waveform layer only needs to repaint when one of these actually
+   * changed — not on every cursor tick during playback or pointer move.
+   */
+  private lastWaveformPeaks: Float32Array | null = null;
+  private lastWaveformShowZeroLine = false;
+  private lastWaveformTheme: WaverTheme | null = null;
+  private lastWaveformHeight = -1;
+
   constructor() {
     super();
     this.shadow = this.attachShadow({ mode: "open" });
@@ -93,10 +107,16 @@ export class WaverElement extends HTMLElement {
 
     this.waveformCanvas = document.createElement("canvas");
     this.waveformCanvas.className = "waver-waveform";
+    this.overlayCanvas = document.createElement("canvas");
+    this.overlayCanvas.className = "waver-overlay";
     this.minimapCanvas = document.createElement("canvas");
     this.minimapCanvas.className = "waver-minimap";
 
-    this.container.append(this.rulerCanvas, this.waveformCanvas, this.minimapCanvas);
+    this.waveStack = document.createElement("div");
+    this.waveStack.className = "waver-wave-stack";
+    this.waveStack.append(this.waveformCanvas, this.overlayCanvas);
+
+    this.container.append(this.rulerCanvas, this.waveStack, this.minimapCanvas);
     this.shadow.append(styleSheet(), this.container);
 
     this.pointerController = new PointerController({
@@ -322,19 +342,38 @@ export class WaverElement extends HTMLElement {
     }
 
     const waveHeight = this.mainPixelHeight();
+    this.waveStack.style.height = `${waveHeight}px`;
     this.waveformCtx = setupHiDPICanvas(this.waveformCanvas, width, waveHeight);
+    this.overlayCtx = setupHiDPICanvas(this.overlayCanvas, width, waveHeight);
     const range = visibleSampleRange(this.zoom, width);
 
     const hasWave = this.samples.length > 0;
     const waveformPeaks = hasWave ? this.getWaveformPeaks(this.samples, range.start, range.end, width) : null;
+    const showZeroLine = hasWave && this.opts.showZeroLine;
 
-    renderWaveform(this.waveformCtx, waveformPeaks, this.theme, {
-      width,
-      height: waveHeight,
-      showZeroLine: hasWave && this.opts.showZeroLine,
-      samplesPerPixel: this.zoom.samplesPerPixel,
-    });
+    // Cursor/selection/hover live on the overlay canvas and repaint every frame regardless (see
+    // below), so this — the actually expensive layer — only redraws when its own inputs changed,
+    // not on every cursor tick during playback or pointer move.
+    const waveformLayerUnchanged =
+      waveformPeaks === this.lastWaveformPeaks &&
+      showZeroLine === this.lastWaveformShowZeroLine &&
+      this.theme === this.lastWaveformTheme &&
+      waveHeight === this.lastWaveformHeight;
 
+    if (!waveformLayerUnchanged) {
+      renderWaveform(this.waveformCtx, waveformPeaks, this.theme, {
+        width,
+        height: waveHeight,
+        showZeroLine,
+        samplesPerPixel: this.zoom.samplesPerPixel,
+      });
+      this.lastWaveformPeaks = waveformPeaks;
+      this.lastWaveformShowZeroLine = showZeroLine;
+      this.lastWaveformTheme = this.theme;
+      this.lastWaveformHeight = waveHeight;
+    }
+
+    this.overlayCtx.clearRect(0, 0, width, waveHeight);
     if (hasWave) {
       if (this.selection) {
         const target = this.pointerController.getAccentEdge();
@@ -350,11 +389,11 @@ export class WaverElement extends HTMLElement {
           : this.accentAnimFromAlpha * (1 - t);
         if (t < 1) this.render();
         else if (!target) this.accentEdge = null;
-        renderSelection(this.waveformCtx, this.selection, this.zoom, this.theme, waveHeight, this.accentEdge, this.accentAlpha);
+        renderSelection(this.overlayCtx, this.selection, this.zoom, this.theme, waveHeight, this.accentEdge, this.accentAlpha);
       }
-      renderCursor(this.waveformCtx, this.cursorSample, this.zoom, this.theme, waveHeight);
+      renderCursor(this.overlayCtx, this.cursorSample, this.zoom, this.theme, waveHeight);
     }
-    if (this.hoverPixel !== null) renderHoverLine(this.waveformCtx, this.hoverPixel, this.theme, waveHeight);
+    if (this.hoverPixel !== null) renderHoverLine(this.overlayCtx, this.hoverPixel, this.theme, waveHeight);
 
     if (this.opts.showMinimap) {
       const minimapHeight = this.minimapPixelHeight();
@@ -487,7 +526,10 @@ function styleSheet(): HTMLStyleElement {
     .waver-container { display: flex; flex-direction: column; height: 100%; overflow: hidden; user-select: none; touch-action: none; }
     canvas { display: block; width: 100%; }
     .waver-ruler { flex: 0 0 auto; cursor: pointer; }
+    .waver-wave-stack { position: relative; }
+    .waver-wave-stack canvas { position: absolute; top: 0; left: 0; }
     .waver-waveform { cursor: crosshair; }
+    .waver-overlay { pointer-events: none; }
     .waver-minimap { cursor: pointer; }
   `;
   return style;
