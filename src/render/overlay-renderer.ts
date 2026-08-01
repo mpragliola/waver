@@ -19,6 +19,17 @@ export function renderCursor(
   ctx.globalAlpha = 1;
 }
 
+const HOVER_LINE_WIDTH_PX = 1;
+const HOVER_LINE_ALPHA = 0.25;
+
+/** Faint vertical line tracking pointer hover, drawn on top of the ruler/waveform canvas. */
+export function renderHoverLine(ctx: CanvasRenderingContext2D, pixel: number, theme: WaverTheme, height: number): void {
+  ctx.globalAlpha = HOVER_LINE_ALPHA;
+  ctx.fillStyle = theme.cursorColor;
+  ctx.fillRect(pixel - HOVER_LINE_WIDTH_PX / 2, 0, HOVER_LINE_WIDTH_PX, height);
+  ctx.globalAlpha = 1;
+}
+
 const EDGE_GLOW_WIDTH_PX = 11;
 const EDGE_GLOW_PEAK_ALPHA = 0.35;
 

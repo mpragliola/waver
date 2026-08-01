@@ -42,7 +42,8 @@ export type SelectionEdge = "start" | "end" | "body" | null;
 export type RulerTimeFormat = "time" | "samples";
 
 export interface WaverOptions {
-  height: number;
+  /** Total widget height in CSS px, or `"auto"` to inherit from the host element's rendered height (CSS). */
+  height: number | "auto";
   minimapHeightRatio: number;
   theme: Partial<WaverTheme>;
   showZeroLine: boolean;
@@ -52,9 +53,21 @@ export interface WaverOptions {
   rulerTimeFormat: RulerTimeFormat;
 }
 
+export interface SelectionEventDetail {
+  selection: SelectionRange | null;
+  startSample: number | null;
+  endSample: number | null;
+  durationSample: number | null;
+}
+
 export type WaverEventMap = {
   "waver:cursorchange": { positionSample: number };
-  "waver:selectionchange": { selection: SelectionRange | null };
+  /** Fires on every intermediate update, including each step of a drag. */
+  "waver:selectionchange": SelectionEventDetail;
+  /** Fires once a change settles: drag end, or any non-drag `setSelection` call that yields a non-null selection. */
+  "waver:selectionchanged": SelectionEventDetail;
+  /** Fires once a change settles to no selection (cleared / reset to full). */
+  "waver:selectionreset": SelectionEventDetail;
   "waver:zoomchange": { zoom: ZoomState };
   "waver:play": { positionSample: number };
   "waver:stop": { positionSample: number };

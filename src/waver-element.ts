@@ -1,14 +1,15 @@
 import { AudioEngine } from "./audio/audio-engine";
 import { ensureGoogleFont } from "./core/font-loader";
+import { createPeaksCache } from "./core/peaks";
 import { normalizeSelection } from "./core/selection";
 import { darkTheme, resolveTheme } from "./core/theme";
-import type { SelectionRange, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
+import type { SelectionEventDetail, SelectionRange, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
 import { clampOffset, fullZoom, pixelToSample, type ViewportConfig } from "./core/viewport";
 import { PointerController } from "./interaction/pointer-controller";
 import { applyWheel } from "./interaction/wheel-controller";
 import { setupHiDPICanvas } from "./render/canvas-utils";
 import { renderMinimap } from "./render/minimap-renderer";
-import { renderCursor, renderSelection } from "./render/overlay-renderer";
+import { renderCursor, renderHoverLine, renderSelection } from "./render/overlay-renderer";
 import { renderRuler } from "./render/ruler-renderer";
 import { renderWaveform } from "./render/waveform-renderer";
 
@@ -75,7 +76,12 @@ export class WaverElement extends HTMLElement {
   private zoomAnimTo: ZoomState = { samplesPerPixel: 1, offsetSample: 0 };
   private zoomAnimStart = 0;
   private lastWheelTime = 0;
+  private hoverPixel: number | null = null;
   private raf: number | null = null;
+
+  /** Memoized per canvas: the underlying scan is skipped unless samples/range/width actually changed. */
+  private readonly getWaveformPeaks = createPeaksCache();
+  private readonly getMinimapPeaks = createPeaksCache();
 
   constructor() {
     super();
@@ -99,7 +105,8 @@ export class WaverElement extends HTMLElement {
       getZoom: () => this.zoom,
       getSelection: () => this.selection,
       getTotalSamples: () => this.samples.length,
-      setSelection: (s) => this.setSelection(s),
+      setSelection: (s, final) => this.setSelection(s, final),
+      commitSelection: () => this.commitSelection(),
       setCursor: (sample) => this.seekTo(sample),
     });
 
@@ -187,11 +194,27 @@ export class WaverElement extends HTMLElement {
     this.setZoom(fullZoom(this.viewportConfig()));
   }
 
-  setSelection(selection: SelectionRange | null): void {
+  setSelection(selection: SelectionRange | null, final = true): void {
     this.selection = selection ? normalizeSelection(selection) : null;
     this.audioEngine?.setLoopRange(this.selection);
-    this.emit("waver:selectionchange", { selection: this.selection });
+    this.emit("waver:selectionchange", this.selectionDetail());
+    if (final) this.commitSelection();
     this.render();
+  }
+
+  /** Emits the settled `selectionchanged`/`selectionreset` event for the current selection, without altering it. */
+  private commitSelection(): void {
+    const detail = this.selectionDetail();
+    this.emit(this.selection === null ? "waver:selectionreset" : "waver:selectionchanged", detail);
+  }
+
+  private selectionDetail(): SelectionEventDetail {
+    return {
+      selection: this.selection,
+      startSample: this.selection?.startSample ?? null,
+      endSample: this.selection?.endSample ?? null,
+      durationSample: this.selection ? this.selection.endSample - this.selection.startSample : null,
+    };
   }
 
   setCursorPosition(sample: number, emitEvent = true): void {
@@ -238,13 +261,17 @@ export class WaverElement extends HTMLElement {
     return this.opts.showRuler ? RULER_HEIGHT_PX : 0;
   }
 
+  private resolveHeight(): number {
+    return this.opts.height === "auto" ? this.container.clientHeight || this.clientHeight || 0 : this.opts.height;
+  }
+
   private mainPixelHeight(): number {
-    const total = this.opts.height - this.rulerPixelHeight();
+    const total = this.resolveHeight() - this.rulerPixelHeight();
     return this.opts.showMinimap ? total * (1 - this.opts.minimapHeightRatio) : total;
   }
 
   private minimapPixelHeight(): number {
-    return this.opts.showMinimap ? this.opts.height * this.opts.minimapHeightRatio : 0;
+    return this.opts.showMinimap ? this.resolveHeight() * this.opts.minimapHeightRatio : 0;
   }
 
   private applyTheme(theme: WaverTheme): void {
@@ -291,6 +318,7 @@ export class WaverElement extends HTMLElement {
         totalSamples: this.samples.length,
         format: this.opts.rulerTimeFormat,
       });
+      if (this.hoverPixel !== null) renderHoverLine(this.rulerCtx, this.hoverPixel, this.theme, rulerHeight);
     } else {
       this.rulerCanvas.style.display = "none";
     }
@@ -300,13 +328,13 @@ export class WaverElement extends HTMLElement {
     const range = { start: this.zoom.offsetSample, end: this.zoom.offsetSample + this.zoom.samplesPerPixel * width };
 
     const hasWave = this.samples.length > 0;
+    const waveformPeaks = hasWave ? this.getWaveformPeaks(this.samples, range.start, range.end, width) : null;
 
-    renderWaveform(this.waveformCtx, this.samples, this.theme, {
+    renderWaveform(this.waveformCtx, waveformPeaks, this.theme, {
       width,
       height: waveHeight,
-      startSample: range.start,
-      endSample: range.end,
       showZeroLine: hasWave && this.opts.showZeroLine,
+      samplesPerPixel: this.zoom.samplesPerPixel,
     });
 
     if (hasWave) {
@@ -328,12 +356,14 @@ export class WaverElement extends HTMLElement {
       }
       renderCursor(this.waveformCtx, this.cursorSample, this.zoom, this.theme, waveHeight);
     }
+    if (this.hoverPixel !== null) renderHoverLine(this.waveformCtx, this.hoverPixel, this.theme, waveHeight);
 
     if (this.opts.showMinimap) {
       const minimapHeight = this.minimapPixelHeight();
       this.minimapCanvas.style.display = "block";
       this.minimapCtx = setupHiDPICanvas(this.minimapCanvas, width, minimapHeight);
-      renderMinimap(this.minimapCtx, this.samples, this.theme, {
+      const minimapPeaks = hasWave ? this.getMinimapPeaks(this.samples, 0, this.samples.length, width) : null;
+      renderMinimap(this.minimapCtx, minimapPeaks, this.theme, {
         width,
         height: minimapHeight,
         totalSamples: this.samples.length,
@@ -356,10 +386,12 @@ export class WaverElement extends HTMLElement {
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerMove(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
+      this.hoverPixel = pixel;
       this.render();
     });
     canvas.addEventListener("pointerleave", () => {
       this.pointerController.clearHover();
+      this.hoverPixel = null;
       this.render();
     });
     canvas.addEventListener("pointerup", (e) => {
@@ -400,8 +432,14 @@ export class WaverElement extends HTMLElement {
       seekTo(this.pixelFromEvent(e, el));
     });
     el.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      seekTo(this.pixelFromEvent(e, el));
+      const pixel = this.pixelFromEvent(e, el);
+      this.hoverPixel = pixel;
+      this.render();
+      if (dragging) seekTo(pixel);
+    });
+    el.addEventListener("pointerleave", () => {
+      this.hoverPixel = null;
+      this.render();
     });
     el.addEventListener("pointerup", () => {
       dragging = false;
@@ -447,8 +485,8 @@ export class WaverElement extends HTMLElement {
 function styleSheet(): HTMLStyleElement {
   const style = document.createElement("style");
   style.textContent = `
-    :host { display: block; width: 100%; }
-    .waver-container { display: flex; flex-direction: column; overflow: hidden; user-select: none; touch-action: none; }
+    :host { display: block; width: 100%; height: 100%; }
+    .waver-container { display: flex; flex-direction: column; height: 100%; overflow: hidden; user-select: none; touch-action: none; }
     canvas { display: block; width: 100%; }
     .waver-ruler { flex: 0 0 auto; cursor: pointer; }
     .waver-waveform { cursor: crosshair; }

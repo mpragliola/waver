@@ -45,6 +45,42 @@ export function computePeaks(
   return result;
 }
 
+/**
+ * Memoizes `computePeaks` against its last call's (samples reference, range, width).
+ * Waveform/minimap content only changes when one of those actually changes — repeated
+ * calls during cursor-only redraws (e.g. every animation frame while playing) reuse the
+ * cached array instead of re-scanning the sample buffer.
+ */
+export function createPeaksCache(): (
+  samples: Float32Array,
+  startSample: number,
+  endSample: number,
+  outputWidth: number
+) => Float32Array {
+  let cachedSamples: Float32Array | null = null;
+  let cachedStart = NaN;
+  let cachedEnd = NaN;
+  let cachedWidth = NaN;
+  let cachedPeaks: Float32Array = new Float32Array(0);
+
+  return (samples, startSample, endSample, outputWidth) => {
+    if (
+      cachedSamples === samples &&
+      cachedStart === startSample &&
+      cachedEnd === endSample &&
+      cachedWidth === outputWidth
+    ) {
+      return cachedPeaks;
+    }
+    cachedPeaks = computePeaks(samples, startSample, endSample, outputWidth);
+    cachedSamples = samples;
+    cachedStart = startSample;
+    cachedEnd = endSample;
+    cachedWidth = outputWidth;
+    return cachedPeaks;
+  };
+}
+
 /** Samples-per-pixel at 100% zoom (whole waveform fit to the given pixel width). */
 export function fullZoomSamplesPerPixel(totalSamples: number, pixelWidth: number): number {
   if (pixelWidth <= 0) return totalSamples;

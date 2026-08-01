@@ -22,6 +22,7 @@ export function renderRuler(
   options: RulerRenderOptions
 ): void {
   const { width, height, sampleRate, totalSamples, format } = options;
+  ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = BACKGROUND_COLOR;
   ctx.fillRect(0, 0, width, height);
 

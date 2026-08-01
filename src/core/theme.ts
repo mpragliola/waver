@@ -40,7 +40,19 @@ export function withAlpha(color: string, alpha: number, fallback = "rgba(0, 0, 0
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
+/** Parsed-color cache: `withAlpha` is called every animation frame (e.g. the selection accent glow) with the same theme color repeatedly, so avoid re-running the regex parse each time. */
+const rgbCache = new Map<string, { r: number; g: number; b: number } | null>();
+
 function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  const cached = rgbCache.get(color);
+  if (cached !== undefined) return cached;
+
+  const result = parseColorToRgbUncached(color);
+  rgbCache.set(color, result);
+  return result;
+}
+
+function parseColorToRgbUncached(color: string): { r: number; g: number; b: number } | null {
   const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
   if (hexMatch) {
     let hex = hexMatch[1];

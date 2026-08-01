@@ -6,7 +6,9 @@ export interface PointerControllerCallbacks {
   getZoom: () => ZoomState;
   getSelection: () => SelectionRange | null;
   getTotalSamples: () => number;
-  setSelection: (selection: SelectionRange | null) => void;
+  setSelection: (selection: SelectionRange | null, final?: boolean) => void;
+  /** Emits the settled selection event for the drag/gesture that just ended. */
+  commitSelection: () => void;
   setCursor: (sample: number) => void;
 }
 
@@ -83,14 +85,14 @@ export class PointerController {
     const sample = clampSample(pixelToSample(pixel, zoom), total);
 
     if (this.dragMode.kind === "create") {
-      this.callbacks.setSelection(normalizeSelection({ startSample: this.dragMode.anchorSample, endSample: sample }));
+      this.callbacks.setSelection(normalizeSelection({ startSample: this.dragMode.anchorSample, endSample: sample }), false);
       return;
     }
 
     if (this.dragMode.kind === "resize") {
       const selection = this.callbacks.getSelection();
       if (!selection) return;
-      this.callbacks.setSelection(resizeSelection(selection, this.dragMode.edge, sample, total));
+      this.callbacks.setSelection(resizeSelection(selection, this.dragMode.edge, sample, total), false);
       return;
     }
 
@@ -99,7 +101,7 @@ export class PointerController {
       if (!selection) return;
       const targetStart = sample - this.dragMode.grabOffsetSamples;
       const delta = targetStart - selection.startSample;
-      this.callbacks.setSelection(translateSelection(selection, delta, total));
+      this.callbacks.setSelection(translateSelection(selection, delta, total), false);
     }
   }
 
@@ -110,6 +112,8 @@ export class PointerController {
     if (!this.didDrag && this.dragMode !== null) {
       const sample = clampSample(pixelToSample(pixel, zoom), total);
       this.callbacks.setCursor(sample);
+    } else if (this.didDrag && this.dragMode !== null) {
+      this.callbacks.commitSelection();
     }
 
     this.dragMode = null;

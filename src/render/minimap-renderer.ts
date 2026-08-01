@@ -1,4 +1,3 @@
-import { computePeaks } from "../core/peaks";
 import type { WaverTheme, ZoomState } from "../core/types";
 import { drawPeakPath } from "./canvas-utils";
 
@@ -10,10 +9,14 @@ export interface MinimapRenderOptions {
   mainPixelWidth: number;
 }
 
-/** Renders the always-100%-zoom minimap plus a translucent overlay marking the main viewport's visible range. */
+/**
+ * Renders the always-100%-zoom minimap plus a translucent overlay marking the main viewport's
+ * visible range. `peaks` is precomputed by the caller (see `createPeaksCache`) — pass `null`
+ * when there's no loaded waveform to draw.
+ */
 export function renderMinimap(
   ctx: CanvasRenderingContext2D,
-  samples: Float32Array,
+  peaks: Float32Array | null,
   theme: WaverTheme,
   options: MinimapRenderOptions
 ): void {
@@ -23,8 +26,7 @@ export function renderMinimap(
   ctx.fillStyle = theme.backgroundColor;
   ctx.fillRect(0, 0, width, height);
 
-  if (samples.length > 0 && width > 0) {
-    const peaks = computePeaks(samples, 0, samples.length, width);
+  if (peaks && width > 0) {
     ctx.fillStyle = theme.waveformColor;
     drawPeakPath(ctx, peaks, width, midY);
   }

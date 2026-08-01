@@ -1,65 +1,75 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>waver demo</title>
-    <style>
-      body {
-        margin: 0;
-        padding: 2rem;
-        background: #0f1115;
-        font-family: 'Google Sans', 'Segoe UI', sans-serif;
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>waver demo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 2rem;
+      background: #0f1115;
+      font-family: 'Google Sans', 'Segoe UI', sans-serif;
+    }
+
+    #app {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    wave-r {
+      margin-top: 1rem;
+    }
+
+    #controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
+    button {
+      font-family: inherit;
+    }
+
+    #status {
+      color: #cbd5e0;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      min-height: 1.2em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(203, 213, 224, 0.3);
+      border-top-color: #cbd5e0;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
       }
-      #app {
-        max-width: 900px;
-        margin: 0 auto;
-      }
-      wave-r {
-        margin-top: 1rem;
-      }
-      #controls {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 1rem;
-      }
-      button {
-        font-family: inherit;
-      }
-      #status {
-        color: #cbd5e0;
-        font-size: 0.85rem;
-        margin-top: 0.5rem;
-        min-height: 1.2em;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .spinner {
-        width: 14px;
-        height: 14px;
-        border: 2px solid rgba(203, 213, 224, 0.3);
-        border-top-color: #cbd5e0;
-        border-radius: 50%;
-        animation: spin 0.7s linear infinite;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app">
-      <input id="file" type="file" accept="audio/*" />
-      <div id="status"></div>
-      <wave-r id="waver"></wave-r>
-      <div id="controls">
-        <button id="play">Play / Stop</button>
-        <button id="zoomFull">Zoom to full</button>
-      </div>
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <input id="file" type="file" accept="audio/*" />
+    <div id="status"></div>
+    <wave-r id="waver"></wave-r>
+    <div id="controls">
+      <button id="play">Play / Stop</button>
+      <button id="zoomFull">Zoom to full</button>
     </div>
-    <script type="module" src="/src/demo/main.ts"></script>
-  </body>
+  </div>
+  <script type="module" src="/src/demo/main.ts"></script>
+</body>
+
 </html>

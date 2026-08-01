@@ -11,6 +11,7 @@ function makeCtx() {
     lineWidth: 0,
     font: "",
     textBaseline: "",
+    clearRect: vi.fn(),
     fillRect: vi.fn(),
     beginPath: vi.fn(),
     moveTo: vi.fn(),
