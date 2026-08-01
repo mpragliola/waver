@@ -19,6 +19,7 @@ describe("PointerController", () => {
       setSelection: (s) => {
         selection = s;
       },
+      commitSelection: () => {},
       setCursor: (s) => {
         cursor = s;
       },

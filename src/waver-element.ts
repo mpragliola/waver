@@ -4,7 +4,7 @@ import { createPeaksCache } from "./core/peaks";
 import { normalizeSelection } from "./core/selection";
 import { darkTheme, resolveTheme } from "./core/theme";
 import type { SelectionEventDetail, SelectionRange, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
-import { clampOffset, fullZoom, pixelToSample, type ViewportConfig } from "./core/viewport";
+import { clampOffset, fullZoom, visibleSampleRange, type ViewportConfig } from "./core/viewport";
 import { PointerController } from "./interaction/pointer-controller";
 import { applyWheel } from "./interaction/wheel-controller";
 import { setupHiDPICanvas } from "./render/canvas-utils";
@@ -325,7 +325,7 @@ export class WaverElement extends HTMLElement {
 
     const waveHeight = this.mainPixelHeight();
     this.waveformCtx = setupHiDPICanvas(this.waveformCanvas, width, waveHeight);
-    const range = { start: this.zoom.offsetSample, end: this.zoom.offsetSample + this.zoom.samplesPerPixel * width };
+    const range = visibleSampleRange(this.zoom, width);
 
     const hasWave = this.samples.length > 0;
     const waveformPeaks = hasWave ? this.getWaveformPeaks(this.samples, range.start, range.end, width) : null;
@@ -500,6 +500,3 @@ export function defineWaverElement(tagName = "wave-r"): void {
     customElements.define(tagName, WaverElement);
   }
 }
-
-// Redundant pixelToSample import kept for downstream consumers building custom controllers.
-export { pixelToSample };
