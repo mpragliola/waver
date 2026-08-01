@@ -51,6 +51,8 @@ export interface WaverOptions {
   showMinimap: boolean;
   showRuler: boolean;
   rulerTimeFormat: RulerTimeFormat;
+  /** Height (CSS px) of the seek ruler strip. Fixed, not part of `height`'s ratio split. */
+  rulerHeight: number;
 }
 
 export interface SelectionEventDetail {

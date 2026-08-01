@@ -13,9 +13,6 @@ import { renderCursor, renderHoverLine, renderSelection } from "./render/overlay
 import { renderRuler } from "./render/ruler-renderer";
 import { renderWaveform } from "./render/waveform-renderer";
 
-/** Height (CSS px) of the seek ruler strip above the waveform. Fixed, not part of `height`'s ratio split. */
-const RULER_HEIGHT_PX = 20;
-
 /** Duration of the selection-edge accent glow's fade-in. */
 const ACCENT_FADE_MS = 150;
 
@@ -39,6 +36,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   showMinimap: true,
   showRuler: true,
   rulerTimeFormat: "time",
+  rulerHeight: 20,
 };
 
 /**
@@ -258,7 +256,7 @@ export class WaverElement extends HTMLElement {
   }
 
   private rulerPixelHeight(): number {
-    return this.opts.showRuler ? RULER_HEIGHT_PX : 0;
+    return this.opts.showRuler ? this.opts.rulerHeight : 0;
   }
 
   private resolveHeight(): number {
@@ -309,7 +307,7 @@ export class WaverElement extends HTMLElement {
 
     if (this.opts.showRuler) {
       this.rulerCanvas.style.display = "block";
-      const rulerHeight = RULER_HEIGHT_PX;
+      const rulerHeight = this.opts.rulerHeight;
       this.rulerCtx = setupHiDPICanvas(this.rulerCanvas, width, rulerHeight);
       renderRuler(this.rulerCtx, this.zoom, this.theme, {
         width,
