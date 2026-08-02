@@ -127,7 +127,7 @@ export class SpectrogramCache {
         freqBins,
         numColumns,
       };
-      worker.postMessage(request);
+      worker.postMessage(request, [slice.buffer]);
     }
 
     return null;
