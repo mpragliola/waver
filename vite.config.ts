@@ -3,6 +3,9 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   build: {
+    // tsc (tsconfig.build.json) already wrote .d.ts files into dist/ before this runs —
+    // the default emptyOutDir would wipe them out from under this step.
+    emptyOutDir: false,
     lib: {
       entry: {
         waver: resolve(__dirname, "src/index.ts"),
