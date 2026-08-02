@@ -9,14 +9,17 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
       "import": "./dist/waver.js"
     },
     "./react": {
       "types": "./dist/react/index.d.ts",
+      "source": "./src/react/index.ts",
       "import": "./dist/waver-react.js"
     },
     "./vue": {
       "types": "./dist/vue/index.d.ts",
+      "source": "./src/vue/index.ts",
       "import": "./dist/waver-vue.js"
     }
   },
