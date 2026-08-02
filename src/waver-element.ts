@@ -490,7 +490,8 @@ export class WaverElement extends HTMLElement {
   }
 
   private minimapPixelHeight(): number {
-    return this.opts.showMinimap ? this.resolveHeight() * this.opts.minimapHeightRatio : 0;
+    const total = this.resolveHeight() - this.rulerPixelHeight();
+    return this.opts.showMinimap ? total * this.opts.minimapHeightRatio : 0;
   }
 
   private applyTheme(theme: WaverTheme): void {
