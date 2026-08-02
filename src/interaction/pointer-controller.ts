@@ -79,6 +79,12 @@ export class PointerController {
       return;
     }
     if (Math.abs(pixel - this.pointerDownX) > 1) this.didDrag = true;
+    // A press that hasn't cleared the drag threshold is still a click, and handlePointerUp
+    // will resolve it as one (cursor move, selection untouched). Mutating the selection here
+    // would leave that click's stray range behind — a degenerate one on empty space, or a
+    // nudged/resized one when the press landed on an existing selection — with nothing to
+    // undo it, since the click path never writes the selection back.
+    if (!this.didDrag) return;
 
     const zoom = this.callbacks.getZoom();
     const total = this.callbacks.getTotalSamples();
