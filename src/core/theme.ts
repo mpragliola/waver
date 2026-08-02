@@ -12,6 +12,7 @@ export const lightTheme: WaverTheme = {
   googleFont: { family: "Google Sans", weights: [400, 500, 600] },
   roundedCorners: true,
   borderRadius: 6,
+  spectrogramColors: ["#FFFFFF", "#2B6CB0", "#1A202C"],
 };
 
 export const darkTheme: WaverTheme = {
@@ -26,6 +27,7 @@ export const darkTheme: WaverTheme = {
   googleFont: { family: "Google Sans", weights: [400, 500, 600] },
   roundedCorners: true,
   borderRadius: 6,
+  spectrogramColors: ["#1A202C", "#63B3ED", "#F7FAFC"],
 };
 
 /** Derives a translucent selection color from a solid waveform color when the caller does not override it. */
@@ -43,7 +45,7 @@ export function withAlpha(color: string, alpha: number, fallback = "rgba(0, 0, 0
 /** Parsed-color cache: `withAlpha` is called every animation frame (e.g. the selection accent glow) with the same theme color repeatedly, so avoid re-running the regex parse each time. */
 const rgbCache = new Map<string, { r: number; g: number; b: number } | null>();
 
-function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+export function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
   const cached = rgbCache.get(color);
   if (cached !== undefined) return cached;
 

@@ -17,6 +17,8 @@ export interface WaverTheme {
   googleFont?: GoogleFontSpec;
   roundedCorners: boolean;
   borderRadius: number;
+  /** Gradient stops (hex or rgb(a)), low intensity -> high intensity, used to colormap the spectrogram view. */
+  spectrogramColors: string[];
 }
 
 export interface PeakPair {
@@ -41,6 +43,8 @@ export type SelectionEdge = "start" | "end" | "body" | null;
 /** `"time"` — hh:mm:ss / mm:ss / ss(.ms) depending on wave duration. `"samples"` — raw sample index. */
 export type RulerTimeFormat = "time" | "samples";
 
+export type ViewMode = "waveform" | "spectrogram";
+
 export interface WaverOptions {
   /** Total widget height in CSS px, or `"auto"` to inherit from the host element's rendered height (CSS). */
   height: number | "auto";
@@ -57,6 +61,14 @@ export interface WaverOptions {
   showLoadButton: boolean;
   /** Show the built-in "Record" button overlaid on the widget while no audio is loaded. */
   showRecordButton: boolean;
+  /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */
+  viewMode: ViewMode;
+  /** STFT window size in samples, must be a power of two. Larger = finer frequency resolution, coarser time resolution. */
+  spectrogramFftSize: number;
+  /** STFT hop size in samples (step between windows). Smaller = finer time resolution, more compute. */
+  spectrogramHop: number;
+  /** Number of log-scaled frequency rows the spectrogram is bucketed down to for display. */
+  spectrogramFreqBins: number;
 }
 
 export interface SelectionEventDetail {
@@ -86,4 +98,7 @@ export type WaverEventMap = {
   "waver:recorderror": { error: Error };
   /** Fires when decoding a file picked via the built-in Load File button fails. */
   "waver:loaderror": { error: Error };
+  "waver:viewmodechange": { viewMode: ViewMode };
+  /** Fires once the background spectrogram analysis for the current buffer/resolution resolves. */
+  "waver:spectrogramready": Record<string, never>;
 };

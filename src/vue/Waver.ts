@@ -1,5 +1,5 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from "vue";
-import type { RulerTimeFormat, SelectionRange, WaverOptions, ZoomState } from "../core/types";
+import type { RulerTimeFormat, SelectionRange, ViewMode, WaverOptions, ZoomState } from "../core/types";
 import { defineWaverElement, type WaverElement } from "../waver-element";
 
 defineWaverElement();
@@ -19,6 +19,10 @@ export const Waver = defineComponent({
     rulerHeight: { type: Number as PropType<number>, default: undefined },
     showLoadButton: { type: Boolean as PropType<boolean>, default: undefined },
     showRecordButton: { type: Boolean as PropType<boolean>, default: undefined },
+    viewMode: { type: String as PropType<ViewMode>, default: undefined },
+    spectrogramFftSize: { type: Number as PropType<number>, default: undefined },
+    spectrogramHop: { type: Number as PropType<number>, default: undefined },
+    spectrogramFreqBins: { type: Number as PropType<number>, default: undefined },
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
@@ -31,6 +35,8 @@ export const Waver = defineComponent({
     recordstop: (_positionSample: number) => true,
     recorderror: (_error: Error) => true,
     loaderror: (_error: Error) => true,
+    viewmodechange: (_viewMode: ViewMode) => true,
+    spectrogramready: () => true,
   },
   setup(props, { emit, expose }) {
     const elRef = ref<WaverElement | null>(null);
@@ -46,6 +52,8 @@ export const Waver = defineComponent({
       ["waver:recordstop", ((e: CustomEvent) => emit("recordstop", e.detail.positionSample)) as EventListener],
       ["waver:recorderror", ((e: CustomEvent) => emit("recorderror", e.detail.error)) as EventListener],
       ["waver:loaderror", ((e: CustomEvent) => emit("loaderror", e.detail.error)) as EventListener],
+      ["waver:viewmodechange", ((e: CustomEvent) => emit("viewmodechange", e.detail.viewMode)) as EventListener],
+      ["waver:spectrogramready", (() => emit("spectrogramready")) as EventListener],
     ];
 
     onMounted(() => {
@@ -74,6 +82,10 @@ export const Waver = defineComponent({
       if (props.rulerHeight !== undefined) opts.rulerHeight = props.rulerHeight;
       if (props.showLoadButton !== undefined) opts.showLoadButton = props.showLoadButton;
       if (props.showRecordButton !== undefined) opts.showRecordButton = props.showRecordButton;
+      if (props.viewMode !== undefined) opts.viewMode = props.viewMode;
+      if (props.spectrogramFftSize !== undefined) opts.spectrogramFftSize = props.spectrogramFftSize;
+      if (props.spectrogramHop !== undefined) opts.spectrogramHop = props.spectrogramHop;
+      if (props.spectrogramFreqBins !== undefined) opts.spectrogramFreqBins = props.spectrogramFreqBins;
       return opts;
     }
 
@@ -101,6 +113,8 @@ export const Waver = defineComponent({
       getSelection: () => elRef.value?.getSelection() ?? null,
       getCursorPosition: () => elRef.value?.getCursorPosition() ?? 0,
       getZoom: () => elRef.value?.getZoom() ?? { samplesPerPixel: 1, offsetSample: 0 },
+      setViewMode: (mode: ViewMode) => elRef.value?.setViewMode(mode),
+      getViewMode: () => elRef.value?.getViewMode() ?? "waveform",
       element: () => elRef.value,
     });
 

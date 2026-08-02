@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { CSSProperties } from "react";
-import type { SelectionRange, WaverOptions, ZoomState } from "../core/types";
+import type { SelectionRange, ViewMode, WaverOptions, ZoomState } from "../core/types";
 import { defineWaverElement, type WaverElement } from "../waver-element";
 
 defineWaverElement();
@@ -23,6 +23,8 @@ export interface WaverHandle {
   getSelection: () => SelectionRange | null;
   getCursorPosition: () => number;
   getZoom: () => ZoomState;
+  setViewMode: (mode: ViewMode) => void;
+  getViewMode: () => ViewMode;
   element: () => WaverElement | null;
 }
 
@@ -39,6 +41,8 @@ export interface WaverProps extends Partial<WaverOptions> {
   onRecordStop?: (positionSample: number) => void;
   onRecordError?: (error: Error) => void;
   onLoadError?: (error: Error) => void;
+  onViewModeChange?: (viewMode: ViewMode) => void;
+  onSpectrogramReady?: () => void;
 }
 
 /** React wrapper around the `<wave-r>` custom element. Configure/load data imperatively via the ref. */
@@ -56,6 +60,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onRecordStop,
     onRecordError,
     onLoadError,
+    onViewModeChange,
+    onSpectrogramReady,
     ...options
   } = props;
   const elRef = useRef<WaverElement | null>(null);
@@ -80,6 +86,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       getSelection: () => elRef.current?.getSelection() ?? null,
       getCursorPosition: () => elRef.current?.getCursorPosition() ?? 0,
       getZoom: () => elRef.current?.getZoom() ?? { samplesPerPixel: 1, offsetSample: 0 },
+      setViewMode: (mode) => elRef.current?.setViewMode(mode),
+      getViewMode: () => elRef.current?.getViewMode() ?? "waveform",
       element: () => elRef.current,
     }),
     []
@@ -105,6 +113,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       ["waver:recordstop", ((e: CustomEvent) => onRecordStop?.(e.detail.positionSample)) as EventListener],
       ["waver:recorderror", ((e: CustomEvent) => onRecordError?.(e.detail.error)) as EventListener],
       ["waver:loaderror", ((e: CustomEvent) => onLoadError?.(e.detail.error)) as EventListener],
+      ["waver:viewmodechange", ((e: CustomEvent) => onViewModeChange?.(e.detail.viewMode)) as EventListener],
+      ["waver:spectrogramready", (() => onSpectrogramReady?.()) as EventListener],
     ];
     handlers.forEach(([type, handler]) => el.addEventListener(type, handler));
     return () => handlers.forEach(([type, handler]) => el.removeEventListener(type, handler));
@@ -119,6 +129,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onRecordStop,
     onRecordError,
     onLoadError,
+    onViewModeChange,
+    onSpectrogramReady,
   ]);
 
   return <wave-r ref={elRef as never} className={className} style={style as never} />;

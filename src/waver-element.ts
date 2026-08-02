@@ -1,9 +1,13 @@
 import { AudioEngine } from "./audio/audio-engine";
+import { RecorderEngine } from "./audio/recorder-engine";
+import { GrowableFloat32Buffer } from "./core/growable-buffer";
 import { ensureGoogleFont } from "./core/font-loader";
+import { micIcon, stopIcon, uploadIcon } from "./core/icons";
 import { createPeaksCache } from "./core/peaks";
 import { normalizeSelection } from "./core/selection";
+import { SpectrogramCache, readVisibleSpectrogramColumns } from "./core/spectrogram-cache";
 import { darkTheme, resolveTheme } from "./core/theme";
-import type { SelectionEventDetail, SelectionRange, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
+import type { SelectionEventDetail, SelectionRange, ViewMode, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
 import { clampOffset, fullZoom, visibleSampleRange, type ViewportConfig } from "./core/viewport";
 import { PointerController } from "./interaction/pointer-controller";
 import { applyWheel } from "./interaction/wheel-controller";
@@ -11,6 +15,7 @@ import { setupHiDPICanvas } from "./render/canvas-utils";
 import { renderMinimap } from "./render/minimap-renderer";
 import { renderCursor, renderHoverLine, renderSelection } from "./render/overlay-renderer";
 import { renderRuler } from "./render/ruler-renderer";
+import { renderSpectrogram } from "./render/spectrogram-renderer";
 import { renderWaveform } from "./render/waveform-renderer";
 
 /** Duration of the selection-edge accent glow's fade-in. */
@@ -37,6 +42,12 @@ const DEFAULT_OPTIONS: WaverOptions = {
   showRuler: true,
   rulerTimeFormat: "time",
   rulerHeight: 16,
+  showLoadButton: true,
+  showRecordButton: true,
+  viewMode: "waveform",
+  spectrogramFftSize: 2048,
+  spectrogramHop: 512,
+  spectrogramFreqBins: 128,
 };
 
 /**
@@ -67,6 +78,20 @@ export class WaverElement extends HTMLElement {
   private resizeObserver: ResizeObserver | null = null;
   private pointerController: PointerController;
   private audioEngine: AudioEngine | null = null;
+
+  private emptyOverlay: HTMLDivElement;
+  private loadButtonEl: HTMLButtonElement;
+  private recordButtonEl: HTMLButtonElement;
+  private recordingBar: HTMLDivElement;
+  private recordingTimeEl: HTMLSpanElement;
+  private fileInput: HTMLInputElement;
+  private internalAudioContext: AudioContext | null = null;
+  private recorderEngine: RecorderEngine | null = null;
+  private recordingState: "idle" | "recording" = "idle";
+  private recordingBuffer = new GrowableFloat32Buffer();
+  private recordingStartedAt = 0;
+  private recordingTimerHandle: number | null = null;
+
   private accentTarget: "start" | "end" | null = null;
   private accentEdge: "start" | "end" | null = null;
   private accentAlpha = 0;
@@ -83,6 +108,7 @@ export class WaverElement extends HTMLElement {
   /** Memoized per canvas: the underlying scan is skipped unless samples/range/width actually changed. */
   private readonly getWaveformPeaks = createPeaksCache();
   private readonly getMinimapPeaks = createPeaksCache();
+  private readonly spectrogramCache = new SpectrogramCache();
 
   /**
    * Identity of the last drawn waveform layer (background + peak path + zero line). Cursor,
@@ -94,6 +120,11 @@ export class WaverElement extends HTMLElement {
   private lastWaveformShowZeroLine = false;
   private lastWaveformTheme: WaverTheme | null = null;
   private lastWaveformHeight = -1;
+
+  /** Same skip-redraw idea as the waveform layer above, applied to the spectrogram layer. */
+  private lastSpectrogramColumns: Float32Array | null = null;
+  private lastSpectrogramTheme: WaverTheme | null = null;
+  private lastSpectrogramHeight = -1;
 
   constructor() {
     super();
@@ -116,8 +147,43 @@ export class WaverElement extends HTMLElement {
     this.waveStack.className = "waver-wave-stack";
     this.waveStack.append(this.waveformCanvas, this.overlayCanvas);
 
-    this.container.append(this.rulerCanvas, this.waveStack, this.minimapCanvas);
+    this.emptyOverlay = document.createElement("div");
+    this.emptyOverlay.className = "waver-empty-overlay";
+    this.loadButtonEl = document.createElement("button");
+    this.loadButtonEl.type = "button";
+    this.loadButtonEl.className = "waver-action-btn";
+    this.loadButtonEl.innerHTML = `${uploadIcon}<span>Load File</span>`;
+    this.recordButtonEl = document.createElement("button");
+    this.recordButtonEl.type = "button";
+    this.recordButtonEl.className = "waver-action-btn waver-action-btn--record";
+    this.recordButtonEl.innerHTML = `${micIcon}<span>Record</span>`;
+    this.emptyOverlay.append(this.loadButtonEl, this.recordButtonEl);
+
+    this.recordingBar = document.createElement("div");
+    this.recordingBar.className = "waver-recording-bar";
+    this.recordingTimeEl = document.createElement("span");
+    this.recordingTimeEl.className = "waver-recording-time";
+    this.recordingTimeEl.textContent = "0:00";
+    const stopButton = document.createElement("button");
+    stopButton.type = "button";
+    stopButton.className = "waver-action-btn waver-action-btn--stop";
+    stopButton.innerHTML = `${stopIcon}<span>Stop</span>`;
+    const recordingDot = document.createElement("span");
+    recordingDot.className = "waver-recording-dot";
+    this.recordingBar.append(recordingDot, this.recordingTimeEl, stopButton);
+
+    this.fileInput = document.createElement("input");
+    this.fileInput.type = "file";
+    this.fileInput.accept = "audio/*";
+    this.fileInput.className = "waver-file-input";
+
+    this.container.append(this.rulerCanvas, this.waveStack, this.minimapCanvas, this.emptyOverlay, this.recordingBar, this.fileInput);
     this.shadow.append(styleSheet(), this.container);
+
+    this.loadButtonEl.addEventListener("click", () => this.fileInput.click());
+    this.recordButtonEl.addEventListener("click", () => void this.startRecording());
+    stopButton.addEventListener("click", () => this.stopRecording());
+    this.fileInput.addEventListener("change", () => void this.handleFileInputChange());
 
     this.pointerController = new PointerController({
       getZoom: () => this.zoom,
@@ -137,20 +203,27 @@ export class WaverElement extends HTMLElement {
     this.applyTheme(this.theme);
     this.resizeObserver = new ResizeObserver(() => this.render());
     this.resizeObserver.observe(this.container);
+    this.updateOverlay();
     this.render();
   }
 
   disconnectedCallback(): void {
     this.resizeObserver?.disconnect();
     this.audioEngine?.dispose();
+    this.recorderEngine?.cancel();
+    this.stopRecordingTimerDisplay();
+    this.spectrogramCache.dispose();
     if (this.raf !== null) cancelAnimationFrame(this.raf);
   }
 
   // ---- Public API -------------------------------------------------------
 
   configure(options: Partial<WaverOptions>): void {
+    const viewModeChanged = options.viewMode !== undefined && options.viewMode !== this.opts.viewMode;
     this.opts = { ...this.opts, ...options };
     if (options.theme) this.applyTheme(resolveTheme(this.theme, options.theme));
+    if (viewModeChanged) this.emit("waver:viewmodechange", { viewMode: this.opts.viewMode });
+    this.updateOverlay();
     this.render();
   }
 
@@ -160,6 +233,7 @@ export class WaverElement extends HTMLElement {
     this.selection = null;
     this.cursorSample = 0;
     this.zoom = fullZoom(this.viewportConfig());
+    this.updateOverlay();
     this.render();
   }
 
@@ -189,6 +263,121 @@ export class WaverElement extends HTMLElement {
 
   togglePlayback(): void {
     this.audioEngine?.toggle(this.cursorSample);
+  }
+
+  hasAudio(): boolean {
+    return this.samples.length > 0;
+  }
+
+  isRecording(): boolean {
+    return this.recordingState === "recording";
+  }
+
+  /** Starts mic capture via the same path as the built-in Record button (getUserMedia permission prompt). */
+  async startRecording(): Promise<void> {
+    if (this.recordingState === "recording") return;
+
+    const engine = new RecorderEngine({ onData: (chunk) => this.appendRecordedChunk(chunk) });
+    try {
+      await engine.start();
+    } catch (err) {
+      this.emit("waver:recorderror", { error: err as Error });
+      return;
+    }
+
+    this.recorderEngine = engine;
+    this.recordingBuffer.reset();
+    this.samples = new Float32Array(0);
+    this.sampleRate = engine.getSampleRate();
+    this.selection = null;
+    this.cursorSample = 0;
+    this.recordingState = "recording";
+    this.recordingStartedAt = performance.now();
+    this.startRecordingTimerDisplay();
+    this.updateOverlay();
+    this.emit("waver:recordstart", {});
+    this.render();
+  }
+
+  /** Stops an in-progress recording and loads the captured audio, same as if it had been picked via Load File. */
+  stopRecording(): void {
+    if (this.recordingState !== "recording" || !this.recorderEngine) return;
+
+    const engine = this.recorderEngine;
+    const context = engine.getContext();
+    const sampleRate = engine.getSampleRate();
+    engine.stop();
+    this.recorderEngine = null;
+    this.recordingState = "idle";
+    this.stopRecordingTimerDisplay();
+
+    const captured = this.recordingBuffer.view();
+    if (context && captured.length > 0) {
+      const buffer = context.createBuffer(1, captured.length, sampleRate);
+      buffer.copyToChannel(new Float32Array(captured), 0);
+      this.loadAudioBuffer(buffer, context);
+    } else {
+      this.updateOverlay();
+      this.render();
+    }
+    this.emit("waver:recordstop", { positionSample: this.samples.length });
+  }
+
+  private appendRecordedChunk(chunk: Float32Array): void {
+    this.recordingBuffer.push(chunk);
+    this.samples = this.recordingBuffer.view();
+    this.zoom = fullZoom(this.viewportConfig());
+    this.render();
+  }
+
+  private startRecordingTimerDisplay(): void {
+    this.updateRecordingTimeLabel();
+    this.recordingTimerHandle = window.setInterval(() => this.updateRecordingTimeLabel(), 500);
+  }
+
+  private stopRecordingTimerDisplay(): void {
+    if (this.recordingTimerHandle !== null) {
+      clearInterval(this.recordingTimerHandle);
+      this.recordingTimerHandle = null;
+    }
+  }
+
+  private updateRecordingTimeLabel(): void {
+    const elapsedSec = Math.max(0, Math.floor((performance.now() - this.recordingStartedAt) / 1000));
+    const mm = Math.floor(elapsedSec / 60);
+    const ss = elapsedSec % 60;
+    this.recordingTimeEl.textContent = `${mm}:${ss.toString().padStart(2, "0")}`;
+  }
+
+  private async handleFileInputChange(): Promise<void> {
+    const file = this.fileInput.files?.[0];
+    this.fileInput.value = "";
+    if (!file) return;
+
+    try {
+      const context = this.ensureInternalAudioContext();
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await context.decodeAudioData(arrayBuffer);
+      this.loadAudioBuffer(audioBuffer, context);
+    } catch (err) {
+      this.emit("waver:loaderror", { error: err as Error });
+    }
+  }
+
+  private ensureInternalAudioContext(): AudioContext {
+    if (!this.internalAudioContext || this.internalAudioContext.state === "closed") {
+      this.internalAudioContext = new AudioContext();
+    }
+    return this.internalAudioContext;
+  }
+
+  private updateOverlay(): void {
+    const showButtons = !this.hasAudio() && this.recordingState !== "recording";
+    this.loadButtonEl.style.display = showButtons && this.opts.showLoadButton ? "" : "none";
+    this.recordButtonEl.style.display = showButtons && this.opts.showRecordButton ? "" : "none";
+    this.emptyOverlay.style.display =
+      showButtons && (this.opts.showLoadButton || this.opts.showRecordButton) ? "flex" : "none";
+    this.recordingBar.style.display = this.recordingState === "recording" ? "flex" : "none";
   }
 
   /** Sets the viewport. Eases to the target over ZOOM_ANIM_MS unless `animate` is false (e.g. active drags). */
@@ -265,6 +454,18 @@ export class WaverElement extends HTMLElement {
     return this.sampleRate;
   }
 
+  getViewMode(): ViewMode {
+    return this.opts.viewMode;
+  }
+
+  /** Switches the main view between waveform and spectrogram; the minimap always stays on waveform. */
+  setViewMode(mode: ViewMode): void {
+    if (this.opts.viewMode === mode) return;
+    this.opts = { ...this.opts, viewMode: mode };
+    this.emit("waver:viewmodechange", { viewMode: mode });
+    this.render();
+  }
+
   // ---- Internals ----------------------------------------------------------
 
   private viewportConfig(): ViewportConfig {
@@ -298,6 +499,7 @@ export class WaverElement extends HTMLElement {
     this.container.style.fontFamily = theme.fontFamily;
     this.container.style.backgroundColor = theme.backgroundColor;
     this.container.style.borderRadius = this.opts.roundedCorners ? `${theme.borderRadius}px` : "0";
+    this.emptyOverlay.style.color = theme.rulerColor;
   }
 
   private render(): void {
@@ -309,6 +511,13 @@ export class WaverElement extends HTMLElement {
   }
 
   private renderNow(): void {
+    // The container's own box height must not depend on its children's (display:none-able) boxes —
+    // otherwise the blank/empty state, which hides ruler+waveform+minimap entirely, collapses to
+    // 0px and the overlay (inset: 0 on a 0-height parent) becomes invisible too.
+    if (this.opts.height !== "auto") {
+      this.container.style.height = `${this.opts.height}px`;
+    }
+
     const width = this.mainPixelWidth();
     if (width <= 0) return;
 
@@ -325,7 +534,10 @@ export class WaverElement extends HTMLElement {
       else this.zoomAnimActive = false;
     }
 
-    if (this.opts.showRuler) {
+    const showChrome = this.samples.length > 0 || this.recordingState === "recording";
+    this.waveStack.style.display = showChrome ? "block" : "none";
+
+    if (this.opts.showRuler && showChrome) {
       this.rulerCanvas.style.display = "block";
       const rulerHeight = this.opts.rulerHeight;
       this.rulerCtx = setupHiDPICanvas(this.rulerCanvas, width, rulerHeight);
@@ -348,29 +560,71 @@ export class WaverElement extends HTMLElement {
     const range = visibleSampleRange(this.zoom, width);
 
     const hasWave = this.samples.length > 0;
-    const waveformPeaks = hasWave ? this.getWaveformPeaks(this.samples, range.start, range.end, width) : null;
-    const showZeroLine = hasWave && this.opts.showZeroLine;
 
-    // Cursor/selection/hover live on the overlay canvas and repaint every frame regardless (see
-    // below), so this — the actually expensive layer — only redraws when its own inputs changed,
-    // not on every cursor tick during playback or pointer move.
-    const waveformLayerUnchanged =
-      waveformPeaks === this.lastWaveformPeaks &&
-      showZeroLine === this.lastWaveformShowZeroLine &&
-      this.theme === this.lastWaveformTheme &&
-      waveHeight === this.lastWaveformHeight;
+    if (this.opts.viewMode === "spectrogram") {
+      const spectrogramData = hasWave
+        ? this.spectrogramCache.request(
+            this.samples,
+            this.sampleRate,
+            this.opts.spectrogramFftSize,
+            this.opts.spectrogramHop,
+            this.opts.spectrogramFreqBins,
+            () => {
+              this.emit("waver:spectrogramready", {});
+              this.render();
+            }
+          )
+        : null;
+      const spectrogramColumns = spectrogramData
+        ? readVisibleSpectrogramColumns(spectrogramData, range.start, range.end, width)
+        : null;
 
-    if (!waveformLayerUnchanged) {
-      renderWaveform(this.waveformCtx, waveformPeaks, this.theme, {
-        width,
-        height: waveHeight,
-        showZeroLine,
-        samplesPerPixel: this.zoom.samplesPerPixel,
-      });
-      this.lastWaveformPeaks = waveformPeaks;
-      this.lastWaveformShowZeroLine = showZeroLine;
-      this.lastWaveformTheme = this.theme;
-      this.lastWaveformHeight = waveHeight;
+      // Unlike the waveform layer, a `null` columns array (still-pending analysis) must always
+      // redraw — it's cheap (background + a status label) and is the only way the "Calculating…"
+      // message actually appears the moment the view switches into spectrogram mode.
+      const spectrogramLayerUnchanged =
+        spectrogramColumns !== null &&
+        spectrogramColumns === this.lastSpectrogramColumns &&
+        this.theme === this.lastSpectrogramTheme &&
+        waveHeight === this.lastSpectrogramHeight;
+
+      if (!spectrogramLayerUnchanged) {
+        renderSpectrogram(this.waveformCtx, spectrogramColumns, this.theme, {
+          width,
+          height: waveHeight,
+          freqBins: this.opts.spectrogramFreqBins,
+        });
+        this.lastSpectrogramColumns = spectrogramColumns;
+        this.lastSpectrogramTheme = this.theme;
+        this.lastSpectrogramHeight = waveHeight;
+      }
+      this.lastWaveformPeaks = null; // force a repaint if we switch back to waveform mode
+    } else {
+      const waveformPeaks = hasWave ? this.getWaveformPeaks(this.samples, range.start, range.end, width) : null;
+      const showZeroLine = hasWave && this.opts.showZeroLine;
+
+      // Cursor/selection/hover live on the overlay canvas and repaint every frame regardless (see
+      // below), so this — the actually expensive layer — only redraws when its own inputs changed,
+      // not on every cursor tick during playback or pointer move.
+      const waveformLayerUnchanged =
+        waveformPeaks === this.lastWaveformPeaks &&
+        showZeroLine === this.lastWaveformShowZeroLine &&
+        this.theme === this.lastWaveformTheme &&
+        waveHeight === this.lastWaveformHeight;
+
+      if (!waveformLayerUnchanged) {
+        renderWaveform(this.waveformCtx, waveformPeaks, this.theme, {
+          width,
+          height: waveHeight,
+          showZeroLine,
+          samplesPerPixel: this.zoom.samplesPerPixel,
+        });
+        this.lastWaveformPeaks = waveformPeaks;
+        this.lastWaveformShowZeroLine = showZeroLine;
+        this.lastWaveformTheme = this.theme;
+        this.lastWaveformHeight = waveHeight;
+      }
+      this.lastSpectrogramColumns = null; // force a repaint if we switch to spectrogram mode
     }
 
     this.overlayCtx.clearRect(0, 0, width, waveHeight);
@@ -395,7 +649,7 @@ export class WaverElement extends HTMLElement {
     }
     if (this.hoverPixel !== null) renderHoverLine(this.overlayCtx, this.hoverPixel, this.theme, waveHeight);
 
-    if (this.opts.showMinimap) {
+    if (this.opts.showMinimap && showChrome) {
       const minimapHeight = this.minimapPixelHeight();
       this.minimapCanvas.style.display = "block";
       this.minimapCtx = setupHiDPICanvas(this.minimapCanvas, width, minimapHeight);
@@ -523,7 +777,7 @@ function styleSheet(): HTMLStyleElement {
   const style = document.createElement("style");
   style.textContent = `
     :host { display: block; width: 100%; height: 100%; }
-    .waver-container { display: flex; flex-direction: column; height: 100%; overflow: hidden; user-select: none; touch-action: none; }
+    .waver-container { position: relative; display: flex; flex-direction: column; height: 100%; overflow: hidden; user-select: none; touch-action: none; }
     canvas { display: block; width: 100%; }
     .waver-ruler { flex: 0 0 auto; cursor: pointer; }
     .waver-wave-stack { position: relative; }
@@ -531,6 +785,35 @@ function styleSheet(): HTMLStyleElement {
     .waver-waveform { cursor: crosshair; }
     .waver-overlay { pointer-events: none; }
     .waver-minimap { cursor: pointer; }
+
+    .waver-file-input { display: none; }
+
+    .waver-empty-overlay {
+      position: absolute; inset: 0; z-index: 5; display: none;
+      align-items: center; justify-content: center; gap: 12px;
+    }
+    .waver-action-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 999px; border: 1px solid currentColor;
+      background: transparent; color: inherit; font: inherit; font-size: 13px; line-height: 1;
+      cursor: pointer; transition: background-color 120ms ease, transform 120ms ease;
+    }
+    .waver-action-btn:hover { background: rgba(127, 127, 127, 0.15); }
+    .waver-action-btn:active { transform: scale(0.96); }
+    .waver-action-btn--record { color: #E53E3E; border-color: #E53E3E; }
+
+    .waver-recording-bar {
+      position: absolute; top: 8px; right: 8px; z-index: 5; display: none;
+      align-items: center; gap: 8px; padding: 4px 10px 4px 8px;
+      border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 12px;
+    }
+    .waver-recording-bar .waver-action-btn { padding: 3px 10px; font-size: 12px; color: #fff; border-color: rgba(255, 255, 255, 0.6); }
+    .waver-recording-time { font-variant-numeric: tabular-nums; }
+    .waver-recording-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #E53E3E;
+      animation: waver-recording-pulse 1s ease-in-out infinite;
+    }
+    @keyframes waver-recording-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
   `;
   return style;
 }
