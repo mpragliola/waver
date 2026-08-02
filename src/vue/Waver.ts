@@ -17,6 +17,8 @@ export const Waver = defineComponent({
     showRuler: { type: Boolean as PropType<boolean>, default: undefined },
     rulerTimeFormat: { type: String as PropType<RulerTimeFormat>, default: undefined },
     rulerHeight: { type: Number as PropType<number>, default: undefined },
+    showLoadButton: { type: Boolean as PropType<boolean>, default: undefined },
+    showRecordButton: { type: Boolean as PropType<boolean>, default: undefined },
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
@@ -25,6 +27,10 @@ export const Waver = defineComponent({
     play: (_positionSample: number) => true,
     stop: (_positionSample: number) => true,
     loop: (_positionSample: number) => true,
+    recordstart: () => true,
+    recordstop: (_positionSample: number) => true,
+    recorderror: (_error: Error) => true,
+    loaderror: (_error: Error) => true,
   },
   setup(props, { emit, expose }) {
     const elRef = ref<WaverElement | null>(null);
@@ -36,6 +42,10 @@ export const Waver = defineComponent({
       ["waver:play", ((e: CustomEvent) => emit("play", e.detail.positionSample)) as EventListener],
       ["waver:stop", ((e: CustomEvent) => emit("stop", e.detail.positionSample)) as EventListener],
       ["waver:loop", ((e: CustomEvent) => emit("loop", e.detail.positionSample)) as EventListener],
+      ["waver:recordstart", (() => emit("recordstart")) as EventListener],
+      ["waver:recordstop", ((e: CustomEvent) => emit("recordstop", e.detail.positionSample)) as EventListener],
+      ["waver:recorderror", ((e: CustomEvent) => emit("recorderror", e.detail.error)) as EventListener],
+      ["waver:loaderror", ((e: CustomEvent) => emit("loaderror", e.detail.error)) as EventListener],
     ];
 
     onMounted(() => {
@@ -62,6 +72,8 @@ export const Waver = defineComponent({
       if (props.showRuler !== undefined) opts.showRuler = props.showRuler;
       if (props.rulerTimeFormat !== undefined) opts.rulerTimeFormat = props.rulerTimeFormat;
       if (props.rulerHeight !== undefined) opts.rulerHeight = props.rulerHeight;
+      if (props.showLoadButton !== undefined) opts.showLoadButton = props.showLoadButton;
+      if (props.showRecordButton !== undefined) opts.showRecordButton = props.showRecordButton;
       return opts;
     }
 
@@ -78,6 +90,10 @@ export const Waver = defineComponent({
       play: () => elRef.value?.play(),
       stop: () => elRef.value?.stop(),
       togglePlayback: () => elRef.value?.togglePlayback(),
+      startRecording: () => elRef.value?.startRecording(),
+      stopRecording: () => elRef.value?.stopRecording(),
+      hasAudio: () => elRef.value?.hasAudio() ?? false,
+      isRecording: () => elRef.value?.isRecording() ?? false,
       setZoom: (zoom: Partial<ZoomState>) => elRef.value?.setZoom(zoom),
       zoomToFull: () => elRef.value?.zoomToFull(),
       setSelection: (selection: SelectionRange | null) => elRef.value?.setSelection(selection),

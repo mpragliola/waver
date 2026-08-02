@@ -52,3 +52,14 @@ waver.addEventListener("waver:cursorchange", (e) => {
   const detail = (e as CustomEvent).detail;
   console.log("cursor", detail.positionSample);
 });
+
+waver.addEventListener("waver:recordstart", () => setStatus("Recording…"));
+waver.addEventListener("waver:recordstop", () => setStatus(""));
+waver.addEventListener("waver:recorderror", (e) => {
+  const detail = (e as CustomEvent).detail;
+  setStatus(`Mic access failed: ${(detail.error as Error).message}`);
+});
+waver.addEventListener("waver:loaderror", (e) => {
+  const detail = (e as CustomEvent).detail;
+  setStatus(`Failed to decode audio: ${(detail.error as Error).message}`);
+});

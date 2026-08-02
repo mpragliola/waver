@@ -53,6 +53,10 @@ export interface WaverOptions {
   rulerTimeFormat: RulerTimeFormat;
   /** Height (CSS px) of the seek ruler strip. Fixed, not part of `height`'s ratio split. */
   rulerHeight: number;
+  /** Show the built-in "Load File" button overlaid on the widget while no audio is loaded. */
+  showLoadButton: boolean;
+  /** Show the built-in "Record" button overlaid on the widget while no audio is loaded. */
+  showRecordButton: boolean;
 }
 
 export interface SelectionEventDetail {
@@ -74,4 +78,12 @@ export type WaverEventMap = {
   "waver:play": { positionSample: number };
   "waver:stop": { positionSample: number };
   "waver:loop": { positionSample: number };
+  /** Fires when the built-in Record button starts a mic capture. */
+  "waver:recordstart": Record<string, never>;
+  /** Fires when recording stops, whether or not a file load follows. */
+  "waver:recordstop": { positionSample: number };
+  /** Fires when starting or running the built-in mic recording fails (e.g. permission denied). */
+  "waver:recorderror": { error: Error };
+  /** Fires when decoding a file picked via the built-in Load File button fails. */
+  "waver:loaderror": { error: Error };
 };

@@ -12,6 +12,10 @@ export interface WaverHandle {
   play: () => void;
   stop: () => void;
   togglePlayback: () => void;
+  startRecording: () => void;
+  stopRecording: () => void;
+  hasAudio: () => boolean;
+  isRecording: () => boolean;
   setZoom: (zoom: Partial<ZoomState>) => void;
   zoomToFull: () => void;
   setSelection: (selection: SelectionRange | null) => void;
@@ -31,11 +35,29 @@ export interface WaverProps extends Partial<WaverOptions> {
   onPlay?: (positionSample: number) => void;
   onStop?: (positionSample: number) => void;
   onLoop?: (positionSample: number) => void;
+  onRecordStart?: () => void;
+  onRecordStop?: (positionSample: number) => void;
+  onRecordError?: (error: Error) => void;
+  onLoadError?: (error: Error) => void;
 }
 
 /** React wrapper around the `<wave-r>` custom element. Configure/load data imperatively via the ref. */
 export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, ref) {
-  const { className, style, onCursorChange, onSelectionChange, onZoomChange, onPlay, onStop, onLoop, ...options } = props;
+  const {
+    className,
+    style,
+    onCursorChange,
+    onSelectionChange,
+    onZoomChange,
+    onPlay,
+    onStop,
+    onLoop,
+    onRecordStart,
+    onRecordStop,
+    onRecordError,
+    onLoadError,
+    ...options
+  } = props;
   const elRef = useRef<WaverElement | null>(null);
 
   useImperativeHandle(
@@ -47,6 +69,10 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       play: () => elRef.current?.play(),
       stop: () => elRef.current?.stop(),
       togglePlayback: () => elRef.current?.togglePlayback(),
+      startRecording: () => void elRef.current?.startRecording(),
+      stopRecording: () => elRef.current?.stopRecording(),
+      hasAudio: () => elRef.current?.hasAudio() ?? false,
+      isRecording: () => elRef.current?.isRecording() ?? false,
       setZoom: (z) => elRef.current?.setZoom(z),
       zoomToFull: () => elRef.current?.zoomToFull(),
       setSelection: (s) => elRef.current?.setSelection(s),
@@ -75,10 +101,25 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       ["waver:play", ((e: CustomEvent) => onPlay?.(e.detail.positionSample)) as EventListener],
       ["waver:stop", ((e: CustomEvent) => onStop?.(e.detail.positionSample)) as EventListener],
       ["waver:loop", ((e: CustomEvent) => onLoop?.(e.detail.positionSample)) as EventListener],
+      ["waver:recordstart", (() => onRecordStart?.()) as EventListener],
+      ["waver:recordstop", ((e: CustomEvent) => onRecordStop?.(e.detail.positionSample)) as EventListener],
+      ["waver:recorderror", ((e: CustomEvent) => onRecordError?.(e.detail.error)) as EventListener],
+      ["waver:loaderror", ((e: CustomEvent) => onLoadError?.(e.detail.error)) as EventListener],
     ];
     handlers.forEach(([type, handler]) => el.addEventListener(type, handler));
     return () => handlers.forEach(([type, handler]) => el.removeEventListener(type, handler));
-  }, [onCursorChange, onSelectionChange, onZoomChange, onPlay, onStop, onLoop]);
+  }, [
+    onCursorChange,
+    onSelectionChange,
+    onZoomChange,
+    onPlay,
+    onStop,
+    onLoop,
+    onRecordStart,
+    onRecordStop,
+    onRecordError,
+    onLoadError,
+  ]);
 
   return <wave-r ref={elRef as never} className={className} style={style as never} />;
 });
