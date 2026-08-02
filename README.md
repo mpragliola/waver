@@ -139,10 +139,13 @@ defaults.
 
 Switch the main view between waveform and spectrogram with `setViewMode()` / `configure({ viewMode })`.
 The minimap is unaffected and always shows the waveform. The spectrogram analysis (windowed FFT
-across the whole loaded buffer) runs once per buffer/resolution in a background Web Worker, lazily
-kicked off the first time you switch into spectrogram view — switching zoom/pan afterwards reuses
-the cached analysis instead of recomputing it. Listen for `waver:spectrogramready` to know when a
-newly kicked-off analysis has resolved (e.g. to hide a loading indicator).
+across the whole loaded buffer) is lazily kicked off the first time you switch into spectrogram
+view, split across several parallel Web Workers, and cached per buffer/resolution — switching
+zoom/pan afterwards reuses it instead of recomputing. While an analysis is in flight the view
+shows a "Calculating spectrogram…" placeholder; listen for `waver:spectrogramready` if you want
+to react to completion yourself (e.g. a custom loading indicator). For very long recordings, the
+effective hop auto-increases to cap total analyzed columns at 20,000 (well beyond any realistic
+viewport width) so extreme file lengths don't analyze at pointlessly fine time resolution.
 
 ### Theme (`WaverTheme`)
 
