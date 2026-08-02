@@ -95,7 +95,11 @@ export class SpectrogramCache {
       const numColumns = colEnd - colStart;
       const sampleStart = colStart * effectiveHop;
       const sampleEnd = Math.min(samples.length, (colEnd - 1) * effectiveHop + fftSize);
-      const slice = samples.subarray(sampleStart, sampleEnd);
+      // A subarray view can't be transferred (it shares the original samples' buffer, which is
+      // still needed for waveform rendering) — copy just the needed range into a fresh buffer so
+      // it CAN be transferred, avoiding the double copy (serialize + deserialize) a structured
+      // clone of an un-transferred TypedArray costs, which dominates on very long files.
+      const slice = samples.slice(sampleStart, sampleEnd);
 
       const worker = new Worker(new URL("../audio/spectrogram-worker.ts", import.meta.url), {
         type: "module",
