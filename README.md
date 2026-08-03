@@ -111,8 +111,8 @@ waverRef.value?.play();
 
 Note: the Vue wrapper exposes every `WaverOptions` prop directly (`height`, `minimapHeightRatio`,
 `theme`, `showZeroLine`, `roundedCorners`, `showMinimap`, `showRuler`, `rulerTimeFormat`,
-`rulerHeight`, `viewMode`, `spectrogramFftSize`, `spectrogramHop`, `spectrogramFreqBins`) — or set
-any of them imperatively via `element.value?.configure({ showRuler: false })`.
+`rulerHeight`, `loadButton`, `recordButton`, `viewMode`, `spectrogramFftSize`, `spectrogramHop`,
+`spectrogramFreqBins`) — or set any of them imperatively via `element.value?.configure({ showRuler: false })`.
 
 ## Configurable options (`WaverOptions`)
 
@@ -130,6 +130,8 @@ defaults.
 | `showRuler` | `boolean` | `true` | Show/hide the seek ruler strip above the waveform. |
 | `rulerTimeFormat` | `"time" \| "samples"` | `"time"` | Ruler labels as hh:mm:ss/mm:ss/ss or raw sample index. |
 | `rulerHeight` | `number` | `20` | Height (px) of the ruler strip. |
+| `loadButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Load File" button shown while no audio is loaded. |
+| `recordButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Record" button shown while no audio is loaded. Use `"disabled"` when several Waver instances share one mic and only one may record at a time. |
 | `viewMode` | `"waveform" \| "spectrogram"` | `"waveform"` | Main view content. The minimap always stays on waveform regardless of this. |
 | `spectrogramFftSize` | `number` | `2048` | STFT window size in samples (power of two). Larger = finer frequency resolution, coarser time resolution. |
 | `spectrogramHop` | `number` | `512` | STFT hop size in samples. Smaller = finer time resolution, more compute. |
@@ -146,6 +148,19 @@ shows a "Calculating spectrogram…" placeholder; listen for `waver:spectrogramr
 to react to completion yourself (e.g. a custom loading indicator). For very long recordings, the
 effective hop auto-increases to cap total analyzed columns at 20,000 (well beyond any realistic
 viewport width) so extreme file lengths don't analyze at pointlessly fine time resolution.
+
+### Recording
+
+When no audio is loaded, the built-in overlay shows "Load File" and "Record" buttons (each
+controlled independently via `loadButton`/`recordButton`, see above). Clicking Record prompts for
+mic access and starts capturing; a centered readout (pulsing dot, elapsed time, Stop button)
+replaces the overlay while recording. Clicking Stop — or calling `stopRecording()` — ends capture
+and loads the recorded audio in place, same as picking a file.
+
+Drive it imperatively with `startRecording()` / `stopRecording()` / `isRecording()`, and listen for
+`waver:recordstart` / `waver:recordstop` / `waver:recorderror`. Set `recordButton: "disabled"` to
+grey out (but keep visible) the Record button on other instances while one is actively recording —
+useful when several Waver instances on a page share a single mic and only one may record at a time.
 
 ### Theme (`WaverTheme`)
 
@@ -183,6 +198,9 @@ Built-in themes: `lightTheme`, `darkTheme` (exported from `waver`). Helpers: `re
 | `getSelection()` / `getCursorPosition()` / `getZoom()` / `getSampleRate()` | Getters. |
 | `setViewMode(mode: "waveform" \| "spectrogram")` | Switch the main view (minimap stays waveform). |
 | `getViewMode()` | Current main view mode. |
+| `startRecording()` | Starts mic capture via the same path as the built-in Record button (triggers the `getUserMedia` permission prompt). |
+| `stopRecording()` | Stops an in-progress recording and loads the captured audio, same as if it had been picked via Load File. |
+| `isRecording()` | Whether a recording is currently in progress. |
 
 ## Events
 
@@ -196,11 +214,16 @@ Built-in themes: `lightTheme`, `darkTheme` (exported from `waver`). Helpers: `re
 | `waver:loop` | `{ positionSample: number }` | Playback looped back to the selection start. |
 | `waver:viewmodechange` | `{ viewMode: "waveform" \| "spectrogram" }` | Main view mode switched. |
 | `waver:spectrogramready` | `{}` | The background spectrogram analysis for the current buffer/resolution resolved. |
+| `waver:recordstart` | `{}` | Mic recording started. |
+| `waver:recordstop` | `{ positionSample: number }` | Mic recording stopped and the captured audio was loaded. |
+| `waver:recorderror` | `{ error: Error }` | Recording failed to start (e.g. mic permission denied). |
+| `waver:loaderror` | `{ error: Error }` | A file picked via the built-in Load button failed to decode. |
 
 React: `onCursorChange` / `onSelectionChange` / `onZoomChange` / `onPlay` / `onStop` / `onLoop` /
-`onViewModeChange` / `onSpectrogramReady` props.
+`onViewModeChange` / `onSpectrogramReady` / `onRecordStart` / `onRecordStop` / `onRecordError` /
+`onLoadError` props.
 Vue: `@cursorchange` / `@selectionchange` / `@zoomchange` / `@play` / `@stop` / `@loop` /
-`@viewmodechange` / `@spectrogramready`.
+`@viewmodechange` / `@spectrogramready` / `@recordstart` / `@recordstop` / `@recorderror` / `@loaderror`.
 
 ## Interaction reference
 
