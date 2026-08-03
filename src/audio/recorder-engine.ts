@@ -14,6 +14,9 @@ export interface RecorderEngineEvents {
 export class RecorderEngine {
   private context: AudioContext | null = null;
   private stream: MediaStream | null = null;
+  /** Only stop() the stream's tracks on teardown if we acquired it ourselves via getUserMedia; a
+   * caller-supplied stream (WebRTC track, shared device stream, etc.) is theirs to manage. */
+  private ownsStream = false;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private silentGain: GainNode | null = null;
@@ -37,12 +40,18 @@ export class RecorderEngine {
     return this.context;
   }
 
-  async start(): Promise<void> {
+  /**
+   * Starts capture. Pass an existing `MediaStream` to record from it directly (a specific
+   * device chosen by the host app, a WebRTC remote track, a screen-share audio track, etc.);
+   * Waver has no business picking an input device itself. Omit it to fall back to the browser's
+   * default mic via getUserMedia.
+   */
+  async start(stream?: MediaStream): Promise<void> {
     if (this.recording) return;
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaStream = stream ?? (await navigator.mediaDevices.getUserMedia({ audio: true }));
     const context = new AudioContext();
-    const sourceNode = context.createMediaStreamSource(stream);
+    const sourceNode = context.createMediaStreamSource(mediaStream);
     const processor = context.createScriptProcessor(4096, 1, 1);
     const silentGain = context.createGain();
     silentGain.gain.value = 0;
@@ -60,7 +69,8 @@ export class RecorderEngine {
     processor.connect(silentGain);
     silentGain.connect(context.destination);
 
-    this.stream = stream;
+    this.stream = mediaStream;
+    this.ownsStream = stream === undefined;
     this.context = context;
     this.sourceNode = sourceNode;
     this.processor = processor;
@@ -88,10 +98,11 @@ export class RecorderEngine {
     this.processor?.disconnect();
     this.sourceNode?.disconnect();
     this.silentGain?.disconnect();
-    this.stream?.getTracks().forEach((t) => t.stop());
+    if (this.ownsStream) this.stream?.getTracks().forEach((t) => t.stop());
     this.processor = null;
     this.sourceNode = null;
     this.silentGain = null;
     this.stream = null;
+    this.ownsStream = false;
   }
 }

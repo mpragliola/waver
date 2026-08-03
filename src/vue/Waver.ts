@@ -33,6 +33,10 @@ export const Waver = defineComponent({
     spectrogramFftSize: { type: Number as PropType<number>, default: undefined },
     spectrogramHop: { type: Number as PropType<number>, default: undefined },
     spectrogramFreqBins: { type: Number as PropType<number>, default: undefined },
+    /** Stream startRecording() uses when called with no argument, including via the built-in
+     * Record button. Set this (e.g. from a device picker) to control what gets recorded; Waver
+     * never picks an input device on its own. */
+    inputStream: { type: Object as PropType<MediaStream | null>, default: undefined },
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
@@ -71,6 +75,7 @@ export const Waver = defineComponent({
       if (!el) return;
       listeners.forEach(([type, handler]) => el.addEventListener(type, handler));
       el.configure(collectOptions());
+      el.setInputStream(props.inputStream ?? null);
     });
 
     onBeforeUnmount(() => {
@@ -107,6 +112,11 @@ export const Waver = defineComponent({
       { deep: true }
     );
 
+    watch(
+      () => props.inputStream,
+      (stream) => elRef.value?.setInputStream(stream ?? null)
+    );
+
     expose({
       loadSamples: (samples: Float32Array, sampleRate: number) => elRef.value?.loadSamples(samples, sampleRate),
       loadAudioBuffer: (buffer: AudioBuffer, context: AudioContext) => elRef.value?.loadAudioBuffer(buffer, context),
@@ -114,7 +124,7 @@ export const Waver = defineComponent({
       play: () => elRef.value?.play(),
       stop: () => elRef.value?.stop(),
       togglePlayback: () => elRef.value?.togglePlayback(),
-      startRecording: () => elRef.value?.startRecording(),
+      startRecording: (stream?: MediaStream) => elRef.value?.startRecording(stream),
       stopRecording: () => elRef.value?.stopRecording(),
       hasAudio: () => elRef.value?.hasAudio() ?? false,
       isRecording: () => elRef.value?.isRecording() ?? false,

@@ -176,4 +176,41 @@ describe("RecorderEngine", () => {
     expect(getUserMedia).toHaveBeenCalledTimes(2);
     expect(contexts).toHaveLength(2);
   });
+
+  describe("with a caller-supplied MediaStream", () => {
+    it("records from the given stream instead of acquiring one via getUserMedia", async () => {
+      const externalTracks = [new FakeTrack()];
+      const externalStream = new FakeMediaStream(externalTracks) as unknown as MediaStream;
+      const engine = new RecorderEngine();
+
+      await engine.start(externalStream);
+
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(engine.isRecording).toBe(true);
+      const ctx = contexts[0];
+      expect(ctx.createMediaStreamSource).toHaveBeenCalledWith(externalStream);
+    });
+
+    it("does not stop tracks on a caller-supplied stream when stop() is called", async () => {
+      const externalTracks = [new FakeTrack()];
+      const externalStream = new FakeMediaStream(externalTracks) as unknown as MediaStream;
+      const engine = new RecorderEngine();
+      await engine.start(externalStream);
+
+      engine.stop();
+
+      externalTracks.forEach((t) => expect(t.stop).not.toHaveBeenCalled());
+    });
+
+    it("does not stop tracks on a caller-supplied stream when cancel() is called", async () => {
+      const externalTracks = [new FakeTrack()];
+      const externalStream = new FakeMediaStream(externalTracks) as unknown as MediaStream;
+      const engine = new RecorderEngine();
+      await engine.start(externalStream);
+
+      engine.cancel();
+
+      externalTracks.forEach((t) => expect(t.stop).not.toHaveBeenCalled());
+    });
+  });
 });

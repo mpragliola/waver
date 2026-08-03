@@ -12,7 +12,7 @@ export interface WaverHandle {
   play: () => void;
   stop: () => void;
   togglePlayback: () => void;
-  startRecording: () => void;
+  startRecording: (stream?: MediaStream) => void;
   stopRecording: () => void;
   hasAudio: () => boolean;
   isRecording: () => boolean;
@@ -31,6 +31,10 @@ export interface WaverHandle {
 export interface WaverProps extends Partial<WaverOptions> {
   className?: string;
   style?: CSSProperties;
+  /** Stream startRecording() uses when called with no argument, including via the built-in Record
+   * button. Set this (e.g. from a device picker) to control what gets recorded; Waver never picks
+   * an input device on its own. */
+  inputStream?: MediaStream | null;
   onCursorChange?: (positionSample: number) => void;
   onSelectionChange?: (selection: SelectionRange | null) => void;
   onZoomChange?: (zoom: ZoomState) => void;
@@ -50,6 +54,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
   const {
     className,
     style,
+    inputStream,
     onCursorChange,
     onSelectionChange,
     onZoomChange,
@@ -75,7 +80,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       play: () => elRef.current?.play(),
       stop: () => elRef.current?.stop(),
       togglePlayback: () => elRef.current?.togglePlayback(),
-      startRecording: () => void elRef.current?.startRecording(),
+      startRecording: (stream) => void elRef.current?.startRecording(stream),
       stopRecording: () => elRef.current?.stopRecording(),
       hasAudio: () => elRef.current?.hasAudio() ?? false,
       isRecording: () => elRef.current?.isRecording() ?? false,
@@ -97,6 +102,10 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     elRef.current?.configure(options);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(options)]);
+
+  useEffect(() => {
+    elRef.current?.setInputStream(inputStream ?? null);
+  }, [inputStream]);
 
   useEffect(() => {
     const el = elRef.current;

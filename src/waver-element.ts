@@ -100,6 +100,10 @@ export class WaverElement extends HTMLElement {
   private fileInput: HTMLInputElement;
   private internalAudioContext: AudioContext | null = null;
   private recorderEngine: RecorderEngine | null = null;
+  /** Set via `inputStream`; used by startRecording() (including the built-in Record button) when
+   * called with no explicit stream argument. Lets a host app pick the input device ahead of time
+   * without having to intercept every place recording can be triggered. */
+  private presetInputStream: MediaStream | null = null;
   private recordingState: "idle" | "recording" = "idle";
   private recordingBuffer = new GrowableFloat32Buffer();
   private recordingStartedAt = 0;
@@ -280,6 +284,19 @@ export class WaverElement extends HTMLElement {
     this.audioEngine?.connectExternalNode(node);
   }
 
+  /**
+   * Sets (or clears) the stream startRecording() uses when called with no explicit argument,
+   * including via the built-in Record button — Waver never picks an input device on its own, so
+   * a host app that wants to let the user choose a device sets this ahead of time.
+   */
+  setInputStream(stream: MediaStream | null): void {
+    this.presetInputStream = stream;
+  }
+
+  getInputStream(): MediaStream | null {
+    return this.presetInputStream;
+  }
+
   play(): void {
     this.audioEngine?.play(this.cursorSample);
   }
@@ -300,13 +317,20 @@ export class WaverElement extends HTMLElement {
     return this.recordingState === "recording";
   }
 
-  /** Starts mic capture via the same path as the built-in Record button (getUserMedia permission prompt). */
-  async startRecording(): Promise<void> {
+  /**
+   * Starts capture. Pass a `MediaStream` to record from it directly (a specific device the host
+   * app already picked, a WebRTC remote track, a screen-share audio track, etc.) — Waver has no
+   * business choosing an input device itself. Omit it to use `inputStream` if one was set via
+   * `setInputStream()`, or fall back to the default mic via getUserMedia otherwise. The built-in
+   * Record button always calls startRecording() with no argument, so setInputStream() is also how
+   * a host app controls what that button records from.
+   */
+  async startRecording(stream?: MediaStream): Promise<void> {
     if (this.recordingState === "recording") return;
 
     const engine = new RecorderEngine({ onData: (chunk) => this.appendRecordedChunk(chunk) });
     try {
-      await engine.start();
+      await engine.start(stream ?? this.presetInputStream ?? undefined);
     } catch (err) {
       this.emit("waver:recorderror", { error: err as Error });
       return;

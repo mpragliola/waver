@@ -383,6 +383,52 @@ describe("WaverElement", () => {
       expect(getUserMedia).toHaveBeenCalledTimes(1);
     });
 
+    it("setInputStream() makes startRecording() (with no argument) use that stream instead of getUserMedia", async () => {
+      const el = mount();
+      stubMicSuccess();
+      const presetStream = makeFakeMediaStream() as unknown as MediaStream;
+      el.setInputStream(presetStream);
+      expect(el.getInputStream()).toBe(presetStream);
+
+      await el.startRecording();
+
+      const getUserMedia = (navigator as unknown as { mediaDevices: { getUserMedia: ReturnType<typeof vi.fn> } })
+        .mediaDevices.getUserMedia;
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(el.isRecording()).toBe(true);
+    });
+
+    it("never stops tracks on a preset inputStream, since the host app owns it, not Waver", async () => {
+      const el = mount();
+      stubMicSuccess();
+      const track = { stop: vi.fn() };
+      const presetStream = { getTracks: () => [track] } as unknown as MediaStream;
+      el.setInputStream(presetStream);
+
+      await el.startRecording();
+      el.stopRecording();
+      expect(track.stop).not.toHaveBeenCalled();
+
+      el.setInputStream(presetStream);
+      await el.startRecording();
+      el.remove(); // disconnectedCallback -> cancel()
+      expect(track.stop).not.toHaveBeenCalled();
+    });
+
+    it("an explicit startRecording(stream) argument overrides a preset inputStream", async () => {
+      const el = mount();
+      stubMicSuccess();
+      el.setInputStream(makeFakeMediaStream() as unknown as MediaStream);
+      const explicitStream = makeFakeMediaStream() as unknown as MediaStream;
+
+      await el.startRecording(explicitStream);
+
+      const getUserMedia = (navigator as unknown as { mediaDevices: { getUserMedia: ReturnType<typeof vi.fn> } })
+        .mediaDevices.getUserMedia;
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(el.isRecording()).toBe(true);
+    });
+
     it("stopRecording() loads captured audio, flips isRecording() false, and emits recordstop", async () => {
       const el = mount();
       stubMicSuccess();
