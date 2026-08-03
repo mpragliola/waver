@@ -4,3 +4,7 @@ node_modules
 dist
 CLAUDE.md
 .playwright-mcp
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache

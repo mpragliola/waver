@@ -1,8 +1,42 @@
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SelectionRange, ViewMode, ZoomState } from "../core/types";
 import type { WaverElement } from "../waver-element";
 import { installDomStubs, makeAudioBuffer, makeFakeAudioContext } from "../waver-element.test-helpers";
 import { Waver } from "./Waver";
+
+/**
+ * Mirrors the object passed to `expose()` in Waver.ts's setup(). Imperative `expose()` calls
+ * aren't statically analyzable the way `<script setup>`'s `defineExpose()` macro is, so
+ * `mount()`'s inferred instance type has no way to know these members exist even though they're
+ * fully present at runtime — cast through this type instead of `wrapper.vm` directly.
+ */
+type WaverVueExposed = {
+  loadSamples: (samples: Float32Array, sampleRate: number) => void;
+  loadAudioBuffer: (buffer: AudioBuffer, context: AudioContext) => void;
+  connectExternalAudioNode: (node: AudioNode | null) => void;
+  play: () => void;
+  stop: () => void;
+  togglePlayback: () => void;
+  startRecording: () => void;
+  stopRecording: () => void;
+  hasAudio: () => boolean;
+  isRecording: () => boolean;
+  setZoom: (zoom: Partial<ZoomState>, animate?: boolean) => void;
+  zoomToFull: () => void;
+  setSelection: (selection: SelectionRange | null) => void;
+  setCursorPosition: (sample: number, emitEvent?: boolean) => void;
+  getSelection: () => SelectionRange | null;
+  getCursorPosition: () => number;
+  getZoom: () => ZoomState;
+  setViewMode: (mode: ViewMode) => void;
+  getViewMode: () => ViewMode;
+  element: () => WaverElement | null;
+};
+
+function exposed(wrapper: { vm: unknown }): WaverVueExposed {
+  return wrapper.vm as WaverVueExposed;
+}
 
 describe("Vue Waver wrapper", () => {
   let stubs: ReturnType<typeof installDomStubs>;
@@ -43,26 +77,26 @@ describe("Vue Waver wrapper", () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
 
-    expect(wrapper.vm.hasAudio()).toBe(false);
-    expect(wrapper.vm.isRecording()).toBe(false);
-    expect(wrapper.vm.getZoom()).toEqual({ samplesPerPixel: 1, offsetSample: 0 });
+    expect(exposed(wrapper).hasAudio()).toBe(false);
+    expect(exposed(wrapper).isRecording()).toBe(false);
+    expect(exposed(wrapper).getZoom()).toEqual({ samplesPerPixel: 1, offsetSample: 0 });
 
-    wrapper.vm.loadSamples(new Float32Array(1000), 44100);
-    expect(wrapper.vm.hasAudio()).toBe(true);
+    exposed(wrapper).loadSamples(new Float32Array(1000), 44100);
+    expect(exposed(wrapper).hasAudio()).toBe(true);
   });
 
   it("element() returns the underlying WaverElement instance", async () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
-    expect(wrapper.vm.element()).toBe(wrapper.find("wave-r").element);
+    expect(exposed(wrapper).element()).toBe(wrapper.find("wave-r").element);
   });
 
   it("emits cursorchange when the element fires waver:cursorchange", async () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
 
-    wrapper.vm.loadSamples(new Float32Array(1000), 44100);
-    wrapper.vm.setCursorPosition(42);
+    exposed(wrapper).loadSamples(new Float32Array(1000), 44100);
+    exposed(wrapper).setCursorPosition(42);
 
     expect(wrapper.emitted("cursorchange")).toEqual([[42]]);
   });
@@ -73,12 +107,12 @@ describe("Vue Waver wrapper", () => {
 
     const ctx = makeFakeAudioContext();
     const buffer = makeAudioBuffer(new Float32Array(1000), 1000);
-    wrapper.vm.loadAudioBuffer(buffer, ctx as unknown as AudioContext);
-    wrapper.vm.play();
+    exposed(wrapper).loadAudioBuffer(buffer, ctx as unknown as AudioContext);
+    exposed(wrapper).play();
     expect(wrapper.emitted("play")).toHaveLength(1);
     stubs.flush();
 
-    wrapper.vm.stop();
+    exposed(wrapper).stop();
     expect(wrapper.emitted("stop")).toHaveLength(1);
   });
 
@@ -86,8 +120,8 @@ describe("Vue Waver wrapper", () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
 
-    wrapper.vm.loadSamples(new Float32Array(1000), 44100);
-    wrapper.vm.setSelection({ startSample: 10, endSample: 20 });
+    exposed(wrapper).loadSamples(new Float32Array(1000), 44100);
+    exposed(wrapper).setSelection({ startSample: 10, endSample: 20 });
 
     expect(wrapper.emitted("selectionchange")).toEqual([[{ startSample: 10, endSample: 20 }]]);
   });
@@ -104,7 +138,7 @@ describe("Vue Waver wrapper", () => {
       },
     });
 
-    await wrapper.vm.startRecording();
+    await exposed(wrapper).startRecording();
 
     expect(wrapper.emitted("recorderror")).toHaveLength(1);
   });
@@ -112,7 +146,7 @@ describe("Vue Waver wrapper", () => {
   it("removes event listeners on unmount (no stale emits)", async () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
-    const el = wrapper.vm.element();
+    const el = exposed(wrapper).element();
 
     wrapper.unmount();
     el?.setCursorPosition(10);
