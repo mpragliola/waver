@@ -101,6 +101,60 @@ describe("WaverElement", () => {
     });
   });
 
+  describe("configure() — hideButtonLabels", () => {
+    it("defaults to visible labels (span present, no icon-only class)", () => {
+      const el = mount();
+      const shadow = el.shadowRoot!;
+      const loadBtn = shadow.querySelector(".waver-action-btn:not(.waver-action-btn--record)") as HTMLButtonElement;
+      const recordBtn = shadow.querySelector(".waver-action-btn--record") as HTMLButtonElement;
+      expect(loadBtn.querySelector("span")).not.toBeNull();
+      expect(recordBtn.querySelector("span")).not.toBeNull();
+      expect(loadBtn.classList.contains("waver-action-btn--icon-only")).toBe(false);
+      expect(recordBtn.classList.contains("waver-action-btn--icon-only")).toBe(false);
+    });
+
+    it("adds the icon-only class to both buttons when set to true", () => {
+      const el = mount();
+      el.configure({ hideButtonLabels: true });
+      const shadow = el.shadowRoot!;
+      const loadBtn = shadow.querySelector(".waver-action-btn:not(.waver-action-btn--record)") as HTMLButtonElement;
+      const recordBtn = shadow.querySelector(".waver-action-btn--record") as HTMLButtonElement;
+      expect(loadBtn.classList.contains("waver-action-btn--icon-only")).toBe(true);
+      expect(recordBtn.classList.contains("waver-action-btn--icon-only")).toBe(true);
+    });
+
+    it("removes the icon-only class again when set back to false", () => {
+      const el = mount();
+      el.configure({ hideButtonLabels: true });
+      el.configure({ hideButtonLabels: false });
+      const shadow = el.shadowRoot!;
+      const loadBtn = shadow.querySelector(".waver-action-btn:not(.waver-action-btn--record)") as HTMLButtonElement;
+      expect(loadBtn.classList.contains("waver-action-btn--icon-only")).toBe(false);
+    });
+
+    it("keeps a static aria-label on both buttons regardless of hideButtonLabels", () => {
+      const el = mount();
+      const shadow = el.shadowRoot!;
+      const loadBtn = shadow.querySelector(".waver-action-btn:not(.waver-action-btn--record)") as HTMLButtonElement;
+      const recordBtn = shadow.querySelector(".waver-action-btn--record") as HTMLButtonElement;
+      expect(loadBtn.getAttribute("aria-label")).toBe("Load File");
+      expect(recordBtn.getAttribute("aria-label")).toBe("Record");
+
+      el.configure({ hideButtonLabels: true });
+      expect(loadBtn.getAttribute("aria-label")).toBe("Load File");
+      expect(recordBtn.getAttribute("aria-label")).toBe("Record");
+    });
+
+    it("does not affect loadButton/recordButton enabled/disabled/hidden state", () => {
+      const el = mount();
+      el.configure({ hideButtonLabels: true, recordButton: "disabled" });
+      const shadow = el.shadowRoot!;
+      const recordBtn = shadow.querySelector(".waver-action-btn--record") as HTMLButtonElement;
+      expect(recordBtn.disabled).toBe(true);
+      expect(recordBtn.classList.contains("waver-action-btn--icon-only")).toBe(true);
+    });
+  });
+
   describe("loadSamples / loadAudioBuffer", () => {
     it("loadSamples sets hasAudio() true and resets selection/cursor/zoom", () => {
       const el = mount();

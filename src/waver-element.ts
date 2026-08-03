@@ -45,6 +45,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   rulerHeight: 16,
   loadButton: "enabled",
   recordButton: "enabled",
+  hideButtonLabels: false,
   channelIndex: 0,
   viewMode: "waveform",
   recordViewMode: "scroll",
@@ -170,10 +171,12 @@ export class WaverElement extends HTMLElement {
     this.loadButtonEl = document.createElement("button");
     this.loadButtonEl.type = "button";
     this.loadButtonEl.className = "waver-action-btn";
+    this.loadButtonEl.setAttribute("aria-label", "Load File");
     this.loadButtonEl.innerHTML = `${uploadIcon}<span>Load File</span>`;
     this.recordButtonEl = document.createElement("button");
     this.recordButtonEl.type = "button";
     this.recordButtonEl.className = "waver-action-btn waver-action-btn--record";
+    this.recordButtonEl.setAttribute("aria-label", "Record");
     this.recordButtonEl.innerHTML = `${micIcon}<span>Record</span>`;
     this.emptyOverlay.append(this.loadButtonEl, this.recordButtonEl);
 
@@ -472,6 +475,8 @@ export class WaverElement extends HTMLElement {
     this.recordButtonEl.style.display = recordVisible ? "" : "none";
     this.loadButtonEl.disabled = this.opts.loadButton === "disabled";
     this.recordButtonEl.disabled = this.opts.recordButton === "disabled";
+    this.loadButtonEl.classList.toggle("waver-action-btn--icon-only", this.opts.hideButtonLabels);
+    this.recordButtonEl.classList.toggle("waver-action-btn--icon-only", this.opts.hideButtonLabels);
     this.emptyOverlay.style.display = loadVisible || recordVisible ? "flex" : "none";
     this.recordingBar.style.display = this.recordingState === "recording" ? "flex" : "none";
   }
@@ -981,6 +986,8 @@ function styleSheet(): HTMLStyleElement {
     .waver-action-btn:active:not(:disabled) { transform: scale(0.96); }
     .waver-action-btn--record { color: #E53E3E; border-color: #E53E3E; }
     .waver-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .waver-action-btn--icon-only { padding: 8px; border-radius: 50%; }
+    .waver-action-btn--icon-only span { display: none; }
 
     .waver-recording-bar {
       position: absolute; inset: 0; z-index: 5; display: none;
