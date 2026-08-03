@@ -80,6 +80,8 @@ export interface WaverOptions {
    * channelIndex argument. Falls back to channel 0 if the source has fewer channels.
    */
   channelIndex: number;
+  /** When true, the built-in "Load File" / "Record" buttons hide their text label, showing only the icon. */
+  hideButtonLabels: boolean;
   /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */
   viewMode: ViewMode;
   /**
