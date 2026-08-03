@@ -32,6 +32,8 @@ type WaverVueExposed = {
   setViewMode: (mode: ViewMode) => void;
   getViewMode: () => ViewMode;
   element: () => WaverElement | null;
+  getSamples: () => Float32Array;
+  getSampleRate: () => number;
 };
 
 function exposed(wrapper: { vm: unknown }): WaverVueExposed {
@@ -89,6 +91,22 @@ describe("Vue Waver wrapper", () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
     expect(exposed(wrapper).element()).toBe(wrapper.find("wave-r").element);
+  });
+
+  it("forwards the channelIndex prop to the element", async () => {
+    const wrapper = mount(Waver, { props: { channelIndex: 1 } });
+    await wrapper.vm.$nextTick();
+    const el = wrapper.find("wave-r").element as WaverElement;
+    expect(el.getChannelIndex()).toBe(1);
+  });
+
+  it("exposes getSamples() and getSampleRate()", async () => {
+    const wrapper = mount(Waver);
+    await wrapper.vm.$nextTick();
+    const el = wrapper.find("wave-r").element as WaverElement;
+    el.loadSamples(new Float32Array([1, 2, 3]), 48000);
+    expect(exposed(wrapper).getSamples()).toEqual(new Float32Array([1, 2, 3]));
+    expect(exposed(wrapper).getSampleRate()).toBe(48000);
   });
 
   it("emits cursorchange when the element fires waver:cursorchange", async () => {
