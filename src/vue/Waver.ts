@@ -1,5 +1,5 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from "vue";
-import type { RulerTimeFormat, SelectionRange, ViewMode, WaverOptions, ZoomState } from "../core/types";
+import type { ControlState, RulerTimeFormat, SelectionRange, ViewMode, WaverOptions, ZoomState } from "../core/types";
 import { defineWaverElement, type WaverElement } from "../waver-element";
 
 defineWaverElement();
@@ -17,8 +17,8 @@ export const Waver = defineComponent({
     showRuler: { type: Boolean as PropType<boolean>, default: undefined },
     rulerTimeFormat: { type: String as PropType<RulerTimeFormat>, default: undefined },
     rulerHeight: { type: Number as PropType<number>, default: undefined },
-    showLoadButton: { type: Boolean as PropType<boolean>, default: undefined },
-    showRecordButton: { type: Boolean as PropType<boolean>, default: undefined },
+    loadButton: { type: String as PropType<ControlState>, default: undefined },
+    recordButton: { type: String as PropType<ControlState>, default: undefined },
     viewMode: { type: String as PropType<ViewMode>, default: undefined },
     spectrogramFftSize: { type: Number as PropType<number>, default: undefined },
     spectrogramHop: { type: Number as PropType<number>, default: undefined },
@@ -80,8 +80,8 @@ export const Waver = defineComponent({
       if (props.showRuler !== undefined) opts.showRuler = props.showRuler;
       if (props.rulerTimeFormat !== undefined) opts.rulerTimeFormat = props.rulerTimeFormat;
       if (props.rulerHeight !== undefined) opts.rulerHeight = props.rulerHeight;
-      if (props.showLoadButton !== undefined) opts.showLoadButton = props.showLoadButton;
-      if (props.showRecordButton !== undefined) opts.showRecordButton = props.showRecordButton;
+      if (props.loadButton !== undefined) opts.loadButton = props.loadButton;
+      if (props.recordButton !== undefined) opts.recordButton = props.recordButton;
       if (props.viewMode !== undefined) opts.viewMode = props.viewMode;
       if (props.spectrogramFftSize !== undefined) opts.spectrogramFftSize = props.spectrogramFftSize;
       if (props.spectrogramHop !== undefined) opts.spectrogramHop = props.spectrogramHop;

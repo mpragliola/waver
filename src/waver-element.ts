@@ -42,8 +42,8 @@ const DEFAULT_OPTIONS: WaverOptions = {
   showRuler: true,
   rulerTimeFormat: "time",
   rulerHeight: 16,
-  showLoadButton: true,
-  showRecordButton: true,
+  loadButton: "enabled",
+  recordButton: "enabled",
   viewMode: "waveform",
   spectrogramFftSize: 2048,
   spectrogramHop: 512,
@@ -170,7 +170,10 @@ export class WaverElement extends HTMLElement {
     stopButton.innerHTML = `${stopIcon}<span>Stop</span>`;
     const recordingDot = document.createElement("span");
     recordingDot.className = "waver-recording-dot";
-    this.recordingBar.append(recordingDot, this.recordingTimeEl, stopButton);
+    const recordingReadout = document.createElement("div");
+    recordingReadout.className = "waver-recording-readout";
+    recordingReadout.append(recordingDot, this.recordingTimeEl);
+    this.recordingBar.append(recordingReadout, stopButton);
 
     this.fileInput = document.createElement("input");
     this.fileInput.type = "file";
@@ -180,8 +183,14 @@ export class WaverElement extends HTMLElement {
     this.container.append(this.rulerCanvas, this.waveStack, this.minimapCanvas, this.emptyOverlay, this.recordingBar, this.fileInput);
     this.shadow.append(styleSheet(), this.container);
 
-    this.loadButtonEl.addEventListener("click", () => this.fileInput.click());
-    this.recordButtonEl.addEventListener("click", () => void this.startRecording());
+    this.loadButtonEl.addEventListener("click", () => {
+      if (this.opts.loadButton !== "enabled") return;
+      this.fileInput.click();
+    });
+    this.recordButtonEl.addEventListener("click", () => {
+      if (this.opts.recordButton !== "enabled") return;
+      void this.startRecording();
+    });
     stopButton.addEventListener("click", () => this.stopRecording());
     this.fileInput.addEventListener("change", () => void this.handleFileInputChange());
 
@@ -373,10 +382,13 @@ export class WaverElement extends HTMLElement {
 
   private updateOverlay(): void {
     const showButtons = !this.hasAudio() && this.recordingState !== "recording";
-    this.loadButtonEl.style.display = showButtons && this.opts.showLoadButton ? "" : "none";
-    this.recordButtonEl.style.display = showButtons && this.opts.showRecordButton ? "" : "none";
-    this.emptyOverlay.style.display =
-      showButtons && (this.opts.showLoadButton || this.opts.showRecordButton) ? "flex" : "none";
+    const loadVisible = showButtons && this.opts.loadButton !== "hidden";
+    const recordVisible = showButtons && this.opts.recordButton !== "hidden";
+    this.loadButtonEl.style.display = loadVisible ? "" : "none";
+    this.recordButtonEl.style.display = recordVisible ? "" : "none";
+    this.loadButtonEl.disabled = this.opts.loadButton === "disabled";
+    this.recordButtonEl.disabled = this.opts.recordButton === "disabled";
+    this.emptyOverlay.style.display = loadVisible || recordVisible ? "flex" : "none";
     this.recordingBar.style.display = this.recordingState === "recording" ? "flex" : "none";
   }
 
@@ -799,22 +811,32 @@ function styleSheet(): HTMLStyleElement {
       background: transparent; color: inherit; font: inherit; font-size: 13px; line-height: 1;
       cursor: pointer; transition: background-color 120ms ease, transform 120ms ease;
     }
-    .waver-action-btn:hover { background: rgba(127, 127, 127, 0.15); }
-    .waver-action-btn:active { transform: scale(0.96); }
+    .waver-action-btn:hover:not(:disabled) { background: rgba(127, 127, 127, 0.15); }
+    .waver-action-btn:active:not(:disabled) { transform: scale(0.96); }
     .waver-action-btn--record { color: #E53E3E; border-color: #E53E3E; }
+    .waver-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .waver-recording-bar {
-      position: absolute; top: 8px; right: 8px; z-index: 5; display: none;
-      align-items: center; gap: 8px; padding: 4px 10px 4px 8px;
-      border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 12px;
+      position: absolute; inset: 0; z-index: 5; display: none;
+      flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+      background: radial-gradient(ellipse 45% 60% at 50% 50%, rgba(0, 0, 0, 0.55), transparent 100%);
     }
-    .waver-recording-bar .waver-action-btn { padding: 3px 10px; font-size: 12px; color: #fff; border-color: rgba(255, 255, 255, 0.6); }
-    .waver-recording-time { font-variant-numeric: tabular-nums; }
+    .waver-recording-readout { display: flex; align-items: center; gap: 12px; }
+    .waver-recording-bar .waver-action-btn {
+      padding: 12px 28px; font-size: 15px; border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55); color: #fff; border-color: rgba(255, 255, 255, 0.7);
+    }
+    .waver-recording-bar .waver-action-btn:hover { background: rgba(229, 62, 62, 0.85); border-color: #E53E3E; }
+    .waver-recording-bar .waver-action-btn svg { width: 18px; height: 18px; }
+    .waver-recording-time {
+      font-variant-numeric: tabular-nums; font-size: 44px; font-weight: 600; line-height: 1;
+    }
     .waver-recording-dot {
-      width: 8px; height: 8px; border-radius: 50%; background: #E53E3E;
+      width: 16px; height: 16px; border-radius: 50%; background: #E53E3E; flex: 0 0 auto;
       animation: waver-recording-pulse 1s ease-in-out infinite;
     }
-    @keyframes waver-recording-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes waver-recording-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
   `;
   return style;
 }

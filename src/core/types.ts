@@ -45,6 +45,9 @@ export type RulerTimeFormat = "time" | "samples";
 
 export type ViewMode = "waveform" | "spectrogram";
 
+/** Visibility/interactivity of a built-in overlay control: rendered and clickable, rendered greyed out, or not rendered at all. */
+export type ControlState = "enabled" | "disabled" | "hidden";
+
 export interface WaverOptions {
   /** Total widget height in CSS px, or `"auto"` to inherit from the host element's rendered height (CSS). */
   height: number | "auto";
@@ -57,10 +60,13 @@ export interface WaverOptions {
   rulerTimeFormat: RulerTimeFormat;
   /** Height (CSS px) of the seek ruler strip. Fixed, not part of `height`'s ratio split. */
   rulerHeight: number;
-  /** Show the built-in "Load File" button overlaid on the widget while no audio is loaded. */
-  showLoadButton: boolean;
-  /** Show the built-in "Record" button overlaid on the widget while no audio is loaded. */
-  showRecordButton: boolean;
+  /** State of the built-in "Load File" button shown while no audio is loaded. */
+  loadButton: ControlState;
+  /**
+   * State of the built-in "Record" button shown while no audio is loaded.
+   * Use `"disabled"` when several Waver instances share one mic and only one may record at a time.
+   */
+  recordButton: ControlState;
   /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */
   viewMode: ViewMode;
   /** STFT window size in samples, must be a power of two. Larger = finer frequency resolution, coarser time resolution. */
