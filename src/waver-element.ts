@@ -276,9 +276,15 @@ export class WaverElement extends HTMLElement {
       this.recordingState = "idle";
       this.stopRecordingTimerDisplay();
     }
+    if (this.raf !== null) {
+      cancelAnimationFrame(this.raf);
+      this.raf = null;
+    }
+    this.zoomAnimActive = false;
     this.recordingBuffer.reset();
     this.audioEngine?.dispose();
     this.audioEngine = null;
+    this.spectrogramCache.dispose();
     this.samples = new Float32Array(0);
     this.sampleRate = 44100;
     this.selection = null;
