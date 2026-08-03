@@ -75,6 +75,26 @@ describe("Vue Waver wrapper", () => {
     expect(configureSpy).toHaveBeenCalledWith(expect.objectContaining({ recordButton: "hidden" }));
   });
 
+  it("forwards the cancelButton prop on mount", async () => {
+    const wrapper = mount(Waver, { props: { cancelButton: "hidden" } });
+    await wrapper.vm.$nextTick();
+    const el = wrapper.find("wave-r").element as WaverElement;
+    el.loadSamples(new Float32Array(1000), 44100);
+    const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+    expect(cancelBtn.style.display).toBe("none");
+  });
+
+  it("re-configures cancelButton reactively when the prop changes", async () => {
+    const wrapper = mount(Waver, { props: { cancelButton: "enabled" as const } });
+    const el = wrapper.find("wave-r").element as WaverElement;
+    const configureSpy = vi.spyOn(el, "configure");
+
+    await wrapper.setProps({ cancelButton: "hidden" });
+    await wrapper.vm.$nextTick();
+
+    expect(configureSpy).toHaveBeenCalledWith(expect.objectContaining({ cancelButton: "hidden" }));
+  });
+
   it("exposes imperative methods on the component instance", async () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
