@@ -395,6 +395,37 @@ describe("WaverElement", () => {
     });
   });
 
+  describe("channelIndex", () => {
+    it("defaults to 0 and is settable via setChannelIndex()/getChannelIndex()", () => {
+      const el = mount();
+      expect(el.getChannelIndex()).toBe(0);
+      el.setChannelIndex(1);
+      expect(el.getChannelIndex()).toBe(1);
+    });
+
+    it("configure({ channelIndex }) also sets it", () => {
+      const el = mount();
+      el.configure({ channelIndex: 2 });
+      expect(el.getChannelIndex()).toBe(2);
+    });
+  });
+
+  describe("getSamples()/getSampleRate() readback", () => {
+    it("returns an empty array and default rate before anything is loaded", () => {
+      const el = mount();
+      expect(el.getSamples()).toEqual(new Float32Array(0));
+      expect(el.getSampleRate()).toBe(44100);
+    });
+
+    it("returns the loaded samples/rate after loadSamples()", () => {
+      const el = mount();
+      const data = new Float32Array([0.1, 0.2, 0.3]);
+      el.loadSamples(data, 48000);
+      expect(el.getSamples()).toEqual(data);
+      expect(el.getSampleRate()).toBe(48000);
+    });
+  });
+
   describe("recording", () => {
     function stubMicSuccess() {
       vi.stubGlobal("navigator", {
