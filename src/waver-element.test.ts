@@ -186,6 +186,20 @@ describe("WaverElement", () => {
 
       expect(track.stop).not.toHaveBeenCalled();
     });
+
+    it("cancels a pending zoom animation frame so it can't overwrite the reset zoom afterward", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(10000), 44100);
+      stubs.flush(); // drain the frame loadSamples's render() scheduled, so only the animation's frame remains queued below
+
+      el.setZoom({ samplesPerPixel: 20, offsetSample: 100 }, true); // animate: true schedules a self-chaining rAF loop
+      el.reset();
+      const resetZoom = el.getZoom();
+
+      stubs.flushUntilIdle(); // run any rAF callback(s) still queued from the animation, if it survived reset()
+
+      expect(el.getZoom()).toEqual(resetZoom);
+    });
   });
 
   describe("playback", () => {
