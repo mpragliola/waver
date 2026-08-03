@@ -9,6 +9,7 @@ const playButton = document.getElementById("play") as HTMLButtonElement;
 const zoomFullButton = document.getElementById("zoomFull") as HTMLButtonElement;
 const viewModeButton = document.getElementById("viewMode") as HTMLButtonElement;
 const resetButton = document.getElementById("reset") as HTMLButtonElement;
+const toggleButtonLabelsButton = document.getElementById("toggleButtonLabels") as HTMLButtonElement;
 const recordViewModeSelect = document.getElementById("recordViewMode") as HTMLSelectElement;
 const inputDeviceSelect = document.getElementById("inputDevice") as HTMLSelectElement;
 
@@ -84,6 +85,12 @@ viewModeButton.addEventListener("click", () => {
   waver.setViewMode(waver.getViewMode() === "waveform" ? "spectrogram" : "waveform");
 });
 resetButton.addEventListener("click", () => waver.reset());
+
+let buttonLabelsHidden = false;
+toggleButtonLabelsButton.addEventListener("click", () => {
+  buttonLabelsHidden = !buttonLabelsHidden;
+  waver.configure({ hideButtonLabels: buttonLabelsHidden });
+});
 
 waver.addEventListener("waver:cursorchange", (e) => {
   const detail = (e as CustomEvent).detail;
