@@ -114,10 +114,10 @@ waverRef.value?.play();
 
 Note: the Vue wrapper exposes every `WaverOptions` prop directly (`height`, `minimapHeightRatio`,
 `theme`, `showZeroLine`, `roundedCorners`, `showMinimap`, `showRuler`, `rulerTimeFormat`,
-`rulerHeight`, `loadButton`, `recordButton`, `viewMode`, `recordViewMode`, `recordWindowSeconds`,
-`spectrogramFftSize`, `spectrogramHop`, `spectrogramFreqBins`) — or set any of them imperatively via
-`element.value?.configure({ showRuler: false })`. There's also an `inputStream` prop (React and Vue)
-that isn't part of `WaverOptions` — see Recording, below.
+`rulerHeight`, `loadButton`, `recordButton`, `channelIndex`, `viewMode`, `recordViewMode`,
+`recordWindowSeconds`, `spectrogramFftSize`, `spectrogramHop`, `spectrogramFreqBins`) — or set any of
+them imperatively via `element.value?.configure({ showRuler: false })`. There's also an `inputStream`
+prop (React and Vue) that isn't part of `WaverOptions` — see Recording, below.
 
 ## Configurable options (`WaverOptions`)
 
@@ -135,6 +135,7 @@ defaults.
 | `showRuler` | `boolean` | `true` | Show/hide the seek ruler strip above the waveform. |
 | `rulerTimeFormat` | `"time" \| "samples"` | `"time"` | Ruler labels as hh:mm:ss/mm:ss/ss or raw sample index. |
 | `rulerHeight` | `number` | `16` | Height (px) of the ruler strip. |
+| `channelIndex` | `number` | `0` | Which channel of a multi-channel recording source to keep. Used by `startRecording()` when called with no explicit `channelIndex` argument (including via the built-in Record button). Falls back to channel 0 if the source has fewer channels. |
 | `loadButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Load File" button shown while no audio is loaded. |
 | `recordButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Record" button shown while no audio is loaded. Use `"disabled"` when several Waver instances share one mic and only one may record at a time. |
 | `viewMode` | `"waveform" \| "spectrogram"` | `"waveform"` | Main view content. The minimap always stays on waveform regardless of this. |
@@ -172,6 +173,11 @@ useful when several Waver instances on a page share a single mic and only one ma
 Waver never picks an input device on its own — `startRecording()` accepts an explicit `MediaStream`,
 or falls back to one set ahead of time via `setInputStream()` (this is also what the built-in Record
 button records from), or the default mic via `getUserMedia` otherwise.
+
+For a multi-channel source (e.g. a stereo interface with the mic on one input), set `channelIndex`
+(via `configure()`/the `channelIndex` prop, or as `startRecording()`'s second argument) to pick which
+channel is kept — picked, not summed, since summing with a silent second input costs 6 dB and can
+comb the signal if the two aren't in phase.
 
 While capturing, the viewport follows `recordViewMode` (`"scroll"` by default, sliding a
 `recordWindowSeconds`-wide window once the recording outgrows it; see the options table above for
@@ -217,17 +223,19 @@ Built-in themes: `lightTheme`, `darkTheme` (exported from `waver`). Helpers: `re
 | `getSelection()` / `getCursorPosition()` / `getZoom()` / `getSampleRate()` | Getters. |
 | `setViewMode(mode: "waveform" \| "spectrogram")` | Switch the main view (minimap stays waveform). |
 | `getViewMode()` | Current main view mode. |
-| `startRecording(stream?: MediaStream)` | Starts mic capture via the same path as the built-in Record button. With no argument, uses the stream set via `setInputStream()` if any, otherwise falls back to the default mic (triggers the `getUserMedia` permission prompt). |
+| `startRecording(stream?: MediaStream, channelIndex?: number)` | Starts mic capture via the same path as the built-in Record button. Omitted arguments fall back to `inputStream`/`channelIndex` set ahead of time, then the default mic/channel 0. |
 | `stopRecording()` | Stops an in-progress recording and loads the captured audio, same as if it had been picked via Load File. |
 | `isRecording()` | Whether a recording is currently in progress. |
 | `setInputStream(stream: MediaStream \| null)` / `getInputStream()` | Set/get the stream `startRecording()` (including the built-in Record button) uses when called with no explicit stream. |
+| `setChannelIndex(index: number)` / `getChannelIndex()` | Set/get the channel `startRecording()` (including the built-in Record button) picks out of a multi-channel source. |
+| `getSamples()` | Current sample buffer — loaded audio, or (mid-recording) what's been captured so far. Empty array if nothing is loaded. |
 | `reset()` | Erases any loaded/recorded audio and returns to the empty-button state, cancelling an in-progress recording if any. |
 | `hasAudio()` | Whether audio is currently loaded. |
 
-React/Vue note: the ref/`expose()` surface mirrors this table (see usage examples above) but currently
-omits `getSampleRate()`; use `element()` (React) / `element` (Vue expose) to reach the underlying
-`WaverElement` for that or any other method not yet forwarded by the wrapper. The `inputStream` prop
-is the React/Vue equivalent of `setInputStream()`.
+React/Vue note: the ref/`expose()` surface mirrors this table (see usage examples above); use
+`element()` (React) / `element` (Vue expose) to reach the underlying `WaverElement` for any method
+not forwarded by the wrapper. The `inputStream` prop is the React/Vue equivalent of `setInputStream()`,
+and the `channelIndex` prop mirrors `setChannelIndex()`.
 
 ## Events
 
