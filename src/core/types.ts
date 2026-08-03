@@ -74,6 +74,12 @@ export interface WaverOptions {
    * Use `"disabled"` when several Waver instances share one mic and only one may record at a time.
    */
   recordButton: ControlState;
+  /**
+   * Which channel of a multi-channel recording source to keep, 0-based. Used by
+   * startRecording() (including the built-in Record button) when called with no explicit
+   * channelIndex argument. Falls back to channel 0 if the source has fewer channels.
+   */
+  channelIndex: number;
   /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */
   viewMode: ViewMode;
   /**

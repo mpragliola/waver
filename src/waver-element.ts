@@ -45,6 +45,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   rulerHeight: 16,
   loadButton: "enabled",
   recordButton: "enabled",
+  channelIndex: 0,
   viewMode: "waveform",
   recordViewMode: "scroll",
   recordWindowSeconds: 2,
@@ -324,6 +325,14 @@ export class WaverElement extends HTMLElement {
     return this.presetInputStream;
   }
 
+  setChannelIndex(index: number): void {
+    this.opts.channelIndex = index;
+  }
+
+  getChannelIndex(): number {
+    return this.opts.channelIndex;
+  }
+
   play(): void {
     this.audioEngine?.play(this.cursorSample);
   }
@@ -352,12 +361,12 @@ export class WaverElement extends HTMLElement {
    * Record button always calls startRecording() with no argument, so setInputStream() is also how
    * a host app controls what that button records from.
    */
-  async startRecording(stream?: MediaStream): Promise<void> {
+  async startRecording(stream?: MediaStream, channelIndex?: number): Promise<void> {
     if (this.recordingState === "recording") return;
 
     const engine = new RecorderEngine({ onData: (chunk) => this.appendRecordedChunk(chunk) });
     try {
-      await engine.start(stream ?? this.presetInputStream ?? undefined);
+      await engine.start(stream ?? this.presetInputStream ?? undefined, channelIndex ?? this.opts.channelIndex);
     } catch (err) {
       this.emit("waver:recorderror", { error: err as Error });
       return;
@@ -539,6 +548,12 @@ export class WaverElement extends HTMLElement {
 
   getSampleRate(): number {
     return this.sampleRate;
+  }
+
+  /** Current sample buffer — whatever's loaded (file, prior recording) or, mid-recording, what
+   * has been captured so far. Empty array if nothing is loaded. */
+  getSamples(): Float32Array {
+    return this.samples;
   }
 
   getViewMode(): ViewMode {

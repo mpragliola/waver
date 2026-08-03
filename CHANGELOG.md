@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setInputStream()` / `getInputStream()` and an optional `MediaStream` argument to
   `startRecording()`, plus the `inputStream` prop in the React/Vue wrappers, for selecting a
   specific recording input device.
+- `channelIndex` option (and `setChannelIndex()`/`getChannelIndex()`), plus an optional
+  `channelIndex` argument to `startRecording()`, for picking a specific channel out of a
+  multi-channel recording source (falls back to channel 0 if the source is narrower than
+  requested). The `channelIndex` prop in the React/Vue wrappers mirrors `inputStream`.
+- `getSamples()` / `getSampleRate()` methods to read back the currently loaded (or, mid-recording,
+  in-progress) sample buffer — lets a host app pull a just-finished recording out after
+  `waver:recordstop` without re-deriving it from the original stream.
 - `reset()` and `hasAudio()` methods, and a `waver:reset` event.
 - `height: "auto"`, inheriting the host element's rendered CSS height.
 - Spectrogram view (`viewMode: "spectrogram"`), computed off the main thread via Web Workers and

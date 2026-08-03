@@ -37,6 +37,7 @@ export const Waver = defineComponent({
      * Record button. Set this (e.g. from a device picker) to control what gets recorded; Waver
      * never picks an input device on its own. */
     inputStream: { type: Object as PropType<MediaStream | null>, default: undefined },
+    channelIndex: { type: Number as PropType<number>, default: undefined },
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
@@ -105,6 +106,7 @@ export const Waver = defineComponent({
       if (props.spectrogramFftSize !== undefined) opts.spectrogramFftSize = props.spectrogramFftSize;
       if (props.spectrogramHop !== undefined) opts.spectrogramHop = props.spectrogramHop;
       if (props.spectrogramFreqBins !== undefined) opts.spectrogramFreqBins = props.spectrogramFreqBins;
+      if (props.channelIndex !== undefined) opts.channelIndex = props.channelIndex;
       return opts;
     }
 
@@ -141,6 +143,8 @@ export const Waver = defineComponent({
       setViewMode: (mode: ViewMode) => elRef.value?.setViewMode(mode),
       getViewMode: () => elRef.value?.getViewMode() ?? "waveform",
       element: () => elRef.value,
+      getSamples: () => elRef.value?.getSamples() ?? new Float32Array(0),
+      getSampleRate: () => elRef.value?.getSampleRate() ?? 44100,
     });
 
     return () => h("wave-r", { ref: elRef });

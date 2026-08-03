@@ -72,6 +72,23 @@ describe("React Waver wrapper", () => {
     expect(ref.current?.element()).toBe(container.querySelector("wave-r"));
   });
 
+  it("forwards the channelIndex prop to the element", async () => {
+    const { container } = render(<Waver channelIndex={1} />);
+    const el = container.querySelector("wave-r") as WaverElement;
+    await act(async () => {});
+    expect(el.getChannelIndex()).toBe(1);
+  });
+
+  it("exposes getSamples() and getSampleRate() via the ref", async () => {
+    const ref = createRef<WaverHandle>();
+    const { container } = render(<Waver ref={ref} />);
+    await act(async () => {});
+    const el = container.querySelector("wave-r") as WaverElement;
+    el.loadSamples(new Float32Array([1, 2, 3]), 48000);
+    expect(ref.current?.getSamples()).toEqual(new Float32Array([1, 2, 3]));
+    expect(ref.current?.getSampleRate()).toBe(48000);
+  });
+
   it("fires onCursorChange when the element emits waver:cursorchange", async () => {
     const onCursorChange = vi.fn();
     const ref = createRef<WaverHandle>();

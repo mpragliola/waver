@@ -18,6 +18,12 @@ class FakeGain {
 }
 
 class FakeSourceNode {
+  channelCount = 1;
+  connect = vi.fn();
+  disconnect = vi.fn();
+}
+
+class FakeSplitterNode {
   connect = vi.fn();
   disconnect = vi.fn();
 }
@@ -29,6 +35,7 @@ class FakeAudioContext {
   createMediaStreamSource = vi.fn(() => new FakeSourceNode());
   createScriptProcessor = vi.fn(() => new FakeProcessor());
   createGain = vi.fn(() => new FakeGain());
+  createChannelSplitter = vi.fn(() => new FakeSplitterNode());
   close = vi.fn(() => {
     this.closed = true;
     return Promise.resolve();
@@ -211,6 +218,62 @@ describe("RecorderEngine", () => {
       engine.cancel();
 
       externalTracks.forEach((t) => expect(t.stop).not.toHaveBeenCalled());
+    });
+  });
+
+  describe("channel selection", () => {
+    it("connects the source directly (no splitter) when channelIndex is 0", async () => {
+      const engine = new RecorderEngine();
+      await engine.start(undefined, 0);
+
+      const ctx = contexts[0];
+      const source = ctx.createMediaStreamSource.mock.results[0].value as FakeSourceNode;
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+      expect(ctx.createChannelSplitter).not.toHaveBeenCalled();
+      expect(source.connect).toHaveBeenCalledWith(processor);
+    });
+
+    it("splits and connects only the requested channel when channelIndex > 0 and the source has enough channels", async () => {
+      const engine = new RecorderEngine();
+      const externalTracks = [new FakeTrack(), new FakeTrack()];
+      const externalStream = new FakeMediaStream(externalTracks) as unknown as MediaStream;
+
+      // Simulate a 2-channel source: patch the next createMediaStreamSource call's result.
+      const twoChannelSource = new FakeSourceNode();
+      twoChannelSource.channelCount = 2;
+      const ctx = new FakeAudioContext();
+      ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return ctx;
+        })
+      );
+
+      await engine.start(externalStream, 1);
+
+      const splitter = ctx.createChannelSplitter.mock.results[0].value as FakeSplitterNode;
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+      expect(ctx.createChannelSplitter).toHaveBeenCalledWith(2);
+      expect(twoChannelSource.connect).toHaveBeenCalledWith(splitter);
+      expect(splitter.connect).toHaveBeenCalledWith(processor, 1);
+      expect(engine.getInputChannelCount()).toBe(2);
+    });
+
+    it("falls back to channel 0 when the requested channel is beyond what the source has", async () => {
+      const engine = new RecorderEngine();
+      await engine.start(undefined, 5); // default fake source is 1-channel
+
+      const ctx = contexts[0];
+      const source = ctx.createMediaStreamSource.mock.results[0].value as FakeSourceNode;
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+      expect(ctx.createChannelSplitter).not.toHaveBeenCalled();
+      expect(source.connect).toHaveBeenCalledWith(processor);
+    });
+
+    it("getInputChannelCount() reports 1 before start()", () => {
+      const engine = new RecorderEngine();
+      expect(engine.getInputChannelCount()).toBe(1);
     });
   });
 });

@@ -395,6 +395,62 @@ describe("WaverElement", () => {
     });
   });
 
+  describe("channelIndex", () => {
+    it("defaults to 0 and is settable via setChannelIndex()/getChannelIndex()", () => {
+      const el = mount();
+      expect(el.getChannelIndex()).toBe(0);
+      el.setChannelIndex(1);
+      expect(el.getChannelIndex()).toBe(1);
+    });
+
+    it("configure({ channelIndex }) also sets it", () => {
+      const el = mount();
+      el.configure({ channelIndex: 2 });
+      expect(el.getChannelIndex()).toBe(2);
+    });
+  });
+
+  describe("getSamples()/getSampleRate() readback", () => {
+    it("returns an empty array and default rate before anything is loaded", () => {
+      const el = mount();
+      expect(el.getSamples()).toEqual(new Float32Array(0));
+      expect(el.getSampleRate()).toBe(44100);
+    });
+
+    it("returns the loaded samples/rate after loadSamples()", () => {
+      const el = mount();
+      const data = new Float32Array([0.1, 0.2, 0.3]);
+      el.loadSamples(data, 48000);
+      expect(el.getSamples()).toEqual(data);
+      expect(el.getSampleRate()).toBe(48000);
+    });
+
+    it("returns in-progress captured samples while a recording is active", async () => {
+      const el = mount();
+      const ctx = makeFakeAudioContext();
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return ctx;
+        })
+      );
+
+      await el.startRecording();
+      expect(el.getSamples()).toEqual(new Float32Array(0));
+
+      const processor = ctx.createScriptProcessor.mock.results[0].value as {
+        onaudioprocess: ((e: unknown) => void) | null;
+      };
+      const inputData = new Float32Array([0.1, 0.2, 0.3]);
+      processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => inputData } });
+
+      expect(el.getSamples()).toEqual(inputData);
+    });
+  });
+
   describe("recording", () => {
     function stubMicSuccess() {
       vi.stubGlobal("navigator", {

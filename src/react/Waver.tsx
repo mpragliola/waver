@@ -27,6 +27,8 @@ export interface WaverHandle {
   setViewMode: (mode: ViewMode) => void;
   getViewMode: () => ViewMode;
   element: () => WaverElement | null;
+  getSamples: () => Float32Array;
+  getSampleRate: () => number;
 }
 
 export interface WaverProps extends Partial<WaverOptions> {
@@ -98,6 +100,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       setViewMode: (mode) => elRef.current?.setViewMode(mode),
       getViewMode: () => elRef.current?.getViewMode() ?? "waveform",
       element: () => elRef.current,
+      getSamples: () => elRef.current?.getSamples() ?? new Float32Array(0),
+      getSampleRate: () => elRef.current?.getSampleRate() ?? 44100,
     }),
     []
   );
