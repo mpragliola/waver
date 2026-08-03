@@ -2,7 +2,7 @@ import { AudioEngine } from "./audio/audio-engine";
 import { RecorderEngine } from "./audio/recorder-engine";
 import { GrowableFloat32Buffer } from "./core/growable-buffer";
 import { ensureGoogleFont } from "./core/font-loader";
-import { micIcon, stopIcon, uploadIcon } from "./core/icons";
+import { closeIcon, micIcon, stopIcon, uploadIcon } from "./core/icons";
 import { createPeaksCache } from "./core/peaks";
 import { normalizeSelection } from "./core/selection";
 import { SpectrogramCache, readVisibleSpectrogramColumns } from "./core/spectrogram-cache";
@@ -46,6 +46,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   loadButton: "enabled",
   recordButton: "enabled",
   hideButtonLabels: false,
+  cancelButton: "enabled",
   channelIndex: 0,
   viewMode: "waveform",
   recordViewMode: "scroll",
@@ -97,6 +98,10 @@ export class WaverElement extends HTMLElement {
   private emptyOverlay: HTMLDivElement;
   private loadButtonEl: HTMLButtonElement;
   private recordButtonEl: HTMLButtonElement;
+  private cancelButtonEl: HTMLButtonElement;
+  private confirmOverlayEl: HTMLDivElement;
+  private confirmKeepBtn: HTMLButtonElement;
+  private confirmClearBtn: HTMLButtonElement;
   private recordingBar: HTMLDivElement;
   private recordingTimeEl: HTMLSpanElement;
   private fileInput: HTMLInputElement;
@@ -110,6 +115,11 @@ export class WaverElement extends HTMLElement {
   private recordingBuffer = new GrowableFloat32Buffer();
   private recordingStartedAt = 0;
   private recordingTimerHandle: number | null = null;
+  /** Bound instance method (not an inline closure) so it can be removed again in disconnectedCallback()
+   * — otherwise this window-level listener would keep the whole WaverElement instance alive forever. */
+  private handleEscapeKey = (e: KeyboardEvent): void => {
+    if (e.key === "Escape" && this.confirmOverlayEl.style.display !== "none") this.closeCancelConfirm();
+  };
 
   private accentTarget: "start" | "end" | null = null;
   private accentEdge: "start" | "end" | null = null;
@@ -180,6 +190,36 @@ export class WaverElement extends HTMLElement {
     this.recordButtonEl.innerHTML = `${micIcon}<span>Record</span>`;
     this.emptyOverlay.append(this.loadButtonEl, this.recordButtonEl);
 
+    this.cancelButtonEl = document.createElement("button");
+    this.cancelButtonEl.type = "button";
+    this.cancelButtonEl.className = "waver-cancel-btn";
+    this.cancelButtonEl.innerHTML = closeIcon;
+    this.cancelButtonEl.setAttribute("aria-label", "Cancel");
+
+    this.confirmOverlayEl = document.createElement("div");
+    this.confirmOverlayEl.className = "waver-confirm-overlay";
+    this.confirmOverlayEl.style.display = "none";
+    const confirmCard = document.createElement("div");
+    confirmCard.className = "waver-confirm-card";
+    confirmCard.setAttribute("role", "dialog");
+    confirmCard.setAttribute("aria-modal", "true");
+    const confirmMessage = document.createElement("p");
+    confirmMessage.className = "waver-confirm-message";
+    confirmMessage.textContent = "Clear waveform?";
+    this.confirmKeepBtn = document.createElement("button");
+    this.confirmKeepBtn.type = "button";
+    this.confirmKeepBtn.className = "waver-action-btn waver-confirm-keep";
+    this.confirmKeepBtn.textContent = "Keep";
+    this.confirmClearBtn = document.createElement("button");
+    this.confirmClearBtn.type = "button";
+    this.confirmClearBtn.className = "waver-action-btn waver-action-btn--record waver-confirm-clear";
+    this.confirmClearBtn.textContent = "Clear";
+    const confirmActions = document.createElement("div");
+    confirmActions.className = "waver-confirm-actions";
+    confirmActions.append(this.confirmKeepBtn, this.confirmClearBtn);
+    confirmCard.append(confirmMessage, confirmActions);
+    this.confirmOverlayEl.append(confirmCard);
+
     this.recordingBar = document.createElement("div");
     this.recordingBar.className = "waver-recording-bar";
     this.recordingTimeEl = document.createElement("span");
@@ -201,7 +241,16 @@ export class WaverElement extends HTMLElement {
     this.fileInput.accept = "audio/*";
     this.fileInput.className = "waver-file-input";
 
-    this.container.append(this.rulerCanvas, this.waveStack, this.minimapCanvas, this.emptyOverlay, this.recordingBar, this.fileInput);
+    this.container.append(
+      this.rulerCanvas,
+      this.waveStack,
+      this.minimapCanvas,
+      this.emptyOverlay,
+      this.cancelButtonEl,
+      this.confirmOverlayEl,
+      this.recordingBar,
+      this.fileInput
+    );
     this.shadow.append(styleSheet(), this.container);
 
     this.loadButtonEl.addEventListener("click", () => {
@@ -213,6 +262,18 @@ export class WaverElement extends HTMLElement {
       void this.startRecording();
     });
     stopButton.addEventListener("click", () => this.stopRecording());
+    this.cancelButtonEl.addEventListener("click", () => {
+      if (this.opts.cancelButton !== "enabled") return;
+      this.openCancelConfirm();
+    });
+    this.confirmKeepBtn.addEventListener("click", () => this.closeCancelConfirm());
+    this.confirmClearBtn.addEventListener("click", () => {
+      this.closeCancelConfirm();
+      this.reset();
+    });
+    this.confirmOverlayEl.addEventListener("click", (e) => {
+      if (e.target === this.confirmOverlayEl) this.closeCancelConfirm();
+    });
     this.fileInput.addEventListener("change", () => void this.handleFileInputChange());
 
     this.pointerController = new PointerController({
@@ -238,6 +299,7 @@ export class WaverElement extends HTMLElement {
     this.applyTheme(this.theme);
     this.resizeObserver = new ResizeObserver(() => this.render());
     this.resizeObserver.observe(this.container);
+    window.addEventListener("keydown", this.handleEscapeKey);
     this.updateOverlay();
     this.render();
   }
@@ -248,6 +310,7 @@ export class WaverElement extends HTMLElement {
     this.recorderEngine?.cancel();
     this.stopRecordingTimerDisplay();
     this.spectrogramCache.dispose();
+    window.removeEventListener("keydown", this.handleEscapeKey);
     if (this.raf !== null) cancelAnimationFrame(this.raf);
   }
 
@@ -297,6 +360,15 @@ export class WaverElement extends HTMLElement {
     this.updateOverlay();
     this.emit("waver:reset", {});
     this.render();
+  }
+
+  private openCancelConfirm(): void {
+    this.confirmOverlayEl.style.display = "flex";
+    this.confirmKeepBtn.focus();
+  }
+
+  private closeCancelConfirm(): void {
+    this.confirmOverlayEl.style.display = "none";
   }
 
   loadAudioBuffer(buffer: AudioBuffer, context: AudioContext): void {
@@ -479,6 +551,14 @@ export class WaverElement extends HTMLElement {
     this.recordButtonEl.classList.toggle("waver-action-btn--icon-only", this.opts.hideButtonLabels);
     this.emptyOverlay.style.display = loadVisible || recordVisible ? "flex" : "none";
     this.recordingBar.style.display = this.recordingState === "recording" ? "flex" : "none";
+
+    const cancelVisible = this.hasAudio() && this.recordingState !== "recording" && this.opts.cancelButton !== "hidden";
+    this.cancelButtonEl.style.display = cancelVisible ? "" : "none";
+    this.cancelButtonEl.disabled = this.opts.cancelButton === "disabled";
+    // The confirm dialog can only meaningfully be open while its trigger button is visible — if
+    // state changed out from under an open dialog (reset(), configure() hiding the button, a
+    // recording starting), strand it closed rather than leaving it floating over stale state.
+    if (!cancelVisible) this.closeCancelConfirm();
   }
 
   /** Sets the viewport. Eases to the target over ZOOM_ANIM_MS unless `animate` is false (e.g. active drags). */
@@ -992,6 +1072,30 @@ function styleSheet(): HTMLStyleElement {
       box-sizing: border-box;
     }
     .waver-action-btn--icon-only span { display: none; }
+
+    .waver-cancel-btn {
+      position: absolute; top: 8px; right: 8px; z-index: 6;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; padding: 0; border-radius: 50%; border: none;
+      background: transparent; color: inherit; opacity: 0.5; cursor: pointer;
+      transition: opacity 120ms ease, background-color 120ms ease, transform 120ms ease;
+    }
+    .waver-cancel-btn:hover:not(:disabled) { opacity: 1; background: rgba(127, 127, 127, 0.15); }
+    .waver-cancel-btn:active:not(:disabled) { transform: scale(0.96); }
+    .waver-cancel-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+    .waver-confirm-overlay {
+      position: absolute; inset: 0; z-index: 10; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(0, 0, 0, 0.5);
+    }
+    .waver-confirm-card {
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      padding: 20px 24px; border-radius: 12px; background: #1a1a1a; color: #fff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .waver-confirm-message { margin: 0; font: inherit; font-size: 14px; }
+    .waver-confirm-actions { display: flex; gap: 12px; }
 
     .waver-recording-bar {
       position: absolute; inset: 0; z-index: 5; display: none;

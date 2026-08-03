@@ -164,6 +164,182 @@ describe("WaverElement", () => {
     });
   });
 
+  describe("configure() — cancelButton ControlState", () => {
+    it("defaults to 'enabled': cancel button hidden with no audio, visible once loaded", () => {
+      const el = mount();
+      const shadow = el.shadowRoot!;
+      const cancelBtn = shadow.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).toBe("none");
+
+      el.loadSamples(new Float32Array(1000), 44100);
+      expect(cancelBtn.style.display).not.toBe("none");
+      expect(cancelBtn.disabled).toBe(false);
+    });
+
+    it("hides the cancel button when set to 'hidden', even with audio loaded", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      el.configure({ cancelButton: "hidden" });
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).toBe("none");
+    });
+
+    it("renders the cancel button disabled (visible, unclickable) when set to 'disabled'", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      el.configure({ cancelButton: "disabled" });
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).not.toBe("none");
+      expect(cancelBtn.disabled).toBe(true);
+    });
+
+    it("stays hidden while a recording is in progress even though hasAudio() may be false", async () => {
+      const el = mount();
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [] }) as unknown as MediaStream) },
+      });
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+      await el.startRecording();
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).toBe("none");
+    });
+
+    it("has a static aria-label regardless of state", () => {
+      const el = mount();
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.getAttribute("aria-label")).toBe("Cancel");
+    });
+  });
+
+  describe("Cancel button confirmation flow", () => {
+    function getConfirmParts(el: WaverElement) {
+      const shadow = el.shadowRoot!;
+      return {
+        overlay: shadow.querySelector(".waver-confirm-overlay") as HTMLElement,
+        keepBtn: shadow.querySelector(".waver-confirm-keep") as HTMLButtonElement,
+        clearBtn: shadow.querySelector(".waver-confirm-clear") as HTMLButtonElement,
+        cancelBtn: shadow.querySelector(".waver-cancel-btn") as HTMLButtonElement,
+      };
+    }
+
+    it("is hidden until the Cancel button is clicked, then opens on click", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      expect(overlay.style.display).toBe("none");
+
+      cancelBtn.click();
+      expect(overlay.style.display).not.toBe("none");
+    });
+
+    it("does not open when cancelButton is 'disabled'", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      el.configure({ cancelButton: "disabled" });
+      const { overlay, cancelBtn } = getConfirmParts(el);
+
+      cancelBtn.click();
+      expect(overlay.style.display).toBe("none");
+    });
+
+    it("Keep button closes the overlay without discarding audio", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const { overlay, keepBtn, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+
+      keepBtn.click();
+
+      expect(overlay.style.display).toBe("none");
+      expect(el.hasAudio()).toBe(true);
+    });
+
+    it("Escape key closes the overlay without discarding audio", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+      expect(overlay.style.display).toBe("none");
+      expect(el.hasAudio()).toBe(true);
+    });
+
+    it("backdrop click closes the overlay without discarding audio", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+
+      overlay.dispatchEvent(new Event("click", { bubbles: true }));
+
+      expect(overlay.style.display).toBe("none");
+      expect(el.hasAudio()).toBe(true);
+    });
+
+    it("Clear button calls reset(): erases audio, shows empty overlay, emits waver:reset, and closes the confirm overlay", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const onReset = vi.fn();
+      el.addEventListener("waver:reset", onReset);
+      const { overlay, clearBtn, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+
+      clearBtn.click();
+
+      expect(el.hasAudio()).toBe(false);
+      expect(overlay.style.display).toBe("none");
+      expect(onReset).toHaveBeenCalledTimes(1);
+      const emptyOverlay = el.shadowRoot!.querySelector(".waver-empty-overlay") as HTMLElement;
+      expect(emptyOverlay.style.display).toBe("flex");
+    });
+
+    it("confirm card has dialog a11y attributes and moves focus to Keep on open", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const shadow = el.shadowRoot!;
+      const card = shadow.querySelector(".waver-confirm-card") as HTMLElement;
+      expect(card.getAttribute("role")).toBe("dialog");
+      expect(card.getAttribute("aria-modal")).toBe("true");
+
+      const { keepBtn, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+      expect(shadow.activeElement).toBe(keepBtn);
+    });
+
+    it("Escape still dismisses the overlay after a disconnect/reconnect cycle", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      document.body.removeChild(el);
+      document.body.appendChild(el);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+      expect(overlay.style.display).not.toBe("none");
+
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+      expect(overlay.style.display).toBe("none");
+    });
+
+    it("closes the confirm overlay if reset() is called externally while it's open", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+      expect(overlay.style.display).not.toBe("none");
+
+      const onReset = vi.fn();
+      el.addEventListener("waver:reset", onReset);
+      el.reset();
+
+      expect(overlay.style.display).toBe("none");
+      expect(onReset).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("loadSamples / loadAudioBuffer", () => {
     it("loadSamples sets hasAudio() true and resets selection/cursor/zoom", () => {
       const el = mount();

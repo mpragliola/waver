@@ -114,7 +114,7 @@ waverRef.value?.play();
 
 Note: the Vue wrapper exposes every `WaverOptions` prop directly (`height`, `minimapHeightRatio`,
 `theme`, `showZeroLine`, `roundedCorners`, `showMinimap`, `showRuler`, `rulerTimeFormat`,
-`rulerHeight`, `loadButton`, `recordButton`, `hideButtonLabels`, `channelIndex`, `viewMode`, `recordViewMode`,
+`rulerHeight`, `loadButton`, `recordButton`, `hideButtonLabels`, `cancelButton`, `channelIndex`, `viewMode`, `recordViewMode`,
 `recordWindowSeconds`, `spectrogramFftSize`, `spectrogramHop`, `spectrogramFreqBins`) — or set any of
 them imperatively via `element.value?.configure({ showRuler: false })`. There's also an `inputStream`
 prop (React and Vue) that isn't part of `WaverOptions` — see Recording, below.
@@ -139,6 +139,7 @@ defaults.
 | `loadButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Load File" button shown while no audio is loaded. |
 | `recordButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Record" button shown while no audio is loaded. Use `"disabled"` when several Waver instances share one mic and only one may record at a time. |
 | `hideButtonLabels` | `boolean` | `false` | Hide the text label on the built-in "Load File" / "Record" buttons, showing only the icon. Both buttons keep a static `aria-label` for accessibility regardless of this setting. |
+| `cancelButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Cancel" (X) button shown top-right once audio is loaded. Clicking it opens a confirmation overlay before discarding via `reset()`. |
 | `viewMode` | `"waveform" \| "spectrogram"` | `"waveform"` | Main view content. The minimap always stays on waveform regardless of this. |
 | `recordViewMode` | `"flat" \| "zoom-out" \| "scroll"` | `"scroll"` | Viewport behavior while recording. `"flat"` draws no waveform while capturing. `"zoom-out"` always spans 0 → record head, compressing as it grows. `"scroll"` spans 0 → head until it outgrows `recordWindowSeconds`, then slides a fixed-width window. Ignored during playback. |
 | `recordWindowSeconds` | `number` | `2` | Width (seconds) of the visible window in `"scroll"` record mode. Ignored by the other record modes. |
