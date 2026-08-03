@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `getSamples()` / `getSampleRate()` methods to read back the currently loaded (or, mid-recording,
   in-progress) sample buffer — lets a host app pull a just-finished recording out after
   `waver:recordstop` without re-deriving it from the original stream.
+- `hideButtonLabels` option to hide the text label on the built-in Load File / Record buttons,
+  leaving a compact icon-only presentation; both buttons keep a static `aria-label` regardless of
+  the setting.
 - `reset()` and `hasAudio()` methods, and a `waver:reset` event.
 - `height: "auto"`, inheriting the host element's rendered CSS height.
 - Spectrogram view (`viewMode: "spectrogram"`), computed off the main thread via Web Workers and

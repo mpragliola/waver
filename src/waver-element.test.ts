@@ -153,6 +153,15 @@ describe("WaverElement", () => {
       expect(recordBtn.disabled).toBe(true);
       expect(recordBtn.classList.contains("waver-action-btn--icon-only")).toBe(true);
     });
+
+    it("the icon-only CSS rule actually hides the label span", () => {
+      const el = mount();
+      const shadow = el.shadowRoot!;
+      const styleText = Array.from(shadow.querySelectorAll("style"))
+        .map((s) => s.textContent)
+        .join("\n");
+      expect(styleText).toMatch(/\.waver-action-btn--icon-only\s+span\s*\{[^}]*display:\s*none/);
+    });
   });
 
   describe("loadSamples / loadAudioBuffer", () => {

@@ -986,7 +986,10 @@ function styleSheet(): HTMLStyleElement {
     .waver-action-btn:active:not(:disabled) { transform: scale(0.96); }
     .waver-action-btn--record { color: #E53E3E; border-color: #E53E3E; }
     .waver-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .waver-action-btn--icon-only { padding: 8px; border-radius: 50%; }
+    .waver-action-btn--icon-only {
+      padding: 8px; border-radius: 50%; gap: 0;
+      width: 34px; height: 34px; justify-content: center;
+    }
     .waver-action-btn--icon-only span { display: none; }
 
     .waver-recording-bar {
