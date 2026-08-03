@@ -10,6 +10,7 @@ import { darkTheme, resolveTheme } from "./core/theme";
 import type { SelectionEventDetail, SelectionRange, ViewMode, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
 import { clampOffset, fullZoom, recordZoom, visibleSampleRange, type ViewportConfig } from "./core/viewport";
 import { PointerController } from "./interaction/pointer-controller";
+import { TouchGestureController, type TouchPoint } from "./interaction/touch-gesture-controller";
 import { applyWheel } from "./interaction/wheel-controller";
 import { setupHiDPICanvas } from "./render/canvas-utils";
 import { renderMinimap } from "./render/minimap-renderer";
@@ -46,7 +47,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   recordButton: "enabled",
   viewMode: "waveform",
   recordViewMode: "scroll",
-  recordWindowSeconds: 10,
+  recordWindowSeconds: 2,
   spectrogramFftSize: 2048,
   spectrogramHop: 512,
   spectrogramFreqBins: 128,
@@ -79,6 +80,16 @@ export class WaverElement extends HTMLElement {
 
   private resizeObserver: ResizeObserver | null = null;
   private pointerController: PointerController;
+  private touchGestureController: TouchGestureController;
+  private activeTouches: TouchPoint[] = [];
+  /**
+   * Touch-type pointerIds currently down, tracked via Pointer Events. `touchstart` (which drives
+   * activeTouches/TouchGestureController) fires AFTER the 2nd finger's own `pointerdown` — so
+   * gating on activeTouches would let that 2nd pointerdown start its own drag before the
+   * touchstart handler ever runs. This set is updated synchronously inside the pointer handlers
+   * themselves, closing that race.
+   */
+  private activeTouchPointerIds = new Set<number>();
   private audioEngine: AudioEngine | null = null;
 
   private emptyOverlay: HTMLDivElement;
@@ -205,6 +216,11 @@ export class WaverElement extends HTMLElement {
       setCursor: (sample) => this.seekTo(sample),
     });
 
+    this.touchGestureController = new TouchGestureController({
+      getZoom: () => this.zoom,
+      getViewportConfig: () => this.viewportConfig(),
+    });
+
     this.attachRulerListeners();
     this.attachWaveformListeners();
     this.attachMinimapListeners();
@@ -326,6 +342,8 @@ export class WaverElement extends HTMLElement {
     if (context && captured.length > 0) {
       const buffer = context.createBuffer(1, captured.length, sampleRate);
       buffer.copyToChannel(new Float32Array(captured), 0);
+      // loadAudioBuffer -> loadSamples always resets to fullZoom(), independent of recordViewMode:
+      // the record-mode viewport is intentionally a capture-only affordance, not carried into playback.
       this.loadAudioBuffer(buffer, context);
     } else {
       this.updateOverlay();
@@ -553,7 +571,11 @@ export class WaverElement extends HTMLElement {
       else this.zoomAnimActive = false;
     }
 
-    const showChrome = this.samples.length > 0 || this.recordingState === "recording";
+    // `"flat"` capture hides the whole waveform area — ruler, minimap and all — not just the wave,
+    // matching the empty state. A ruler over a blank canvas would advertise a viewport that flat
+    // deliberately doesn't have.
+    const flatCapture = this.recordingState === "recording" && this.opts.recordViewMode === "flat";
+    const showChrome = (this.samples.length > 0 || this.recordingState === "recording") && !flatCapture;
     this.waveStack.style.display = showChrome ? "block" : "none";
 
     if (this.opts.showRuler && showChrome) {
@@ -578,10 +600,9 @@ export class WaverElement extends HTMLElement {
     this.overlayCtx = setupHiDPICanvas(this.overlayCanvas, width, waveHeight);
     const range = visibleSampleRange(this.zoom, width);
 
-    // `"flat"` record mode keeps the canvas empty (background + ruler only) while capturing; the
-    // samples are still accumulating, they just aren't drawn until stopRecording() loads them.
-    const suppressWave = this.recordingState === "recording" && this.opts.recordViewMode === "flat";
-    const hasWave = this.samples.length > 0 && !suppressWave;
+    // Samples keep accumulating during `"flat"` capture, they just aren't drawn until
+    // stopRecording() loads them and reveals the whole recording at full zoom.
+    const hasWave = this.samples.length > 0 && !flatCapture;
 
     if (this.opts.viewMode === "spectrogram") {
       const spectrogramData = hasWave
@@ -697,16 +718,31 @@ export class WaverElement extends HTMLElement {
     return this.recordingState === "recording";
   }
 
+  private isMultiTouchActive(): boolean {
+    return this.activeTouchPointerIds.size >= 2;
+  }
+
   private attachWaveformListeners(): void {
     const canvas = this.waveformCanvas;
     canvas.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch") {
+        this.activeTouchPointerIds.add(e.pointerId);
+        if (this.activeTouchPointerIds.size >= 2) {
+          // This pointerdown is the 2nd+ touch: hand off to pinch/pan, abandoning any
+          // single-finger drag the 1st touch had started (touchstart fires after this, so the
+          // handoff can't wait for it).
+          if (this.activeTouchPointerIds.size === 2) this.pointerController.cancelDrag();
+          this.render();
+          return;
+        }
+      }
       if (this.interactionLocked()) return;
       canvas.setPointerCapture(e.pointerId);
       this.pointerController.handlePointerDown(this.pixelFromEvent(e));
       canvas.style.cursor = this.pointerController.getHoverCursor(this.pixelFromEvent(e));
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (this.interactionLocked()) return;
+      if (this.interactionLocked() || this.isMultiTouchActive()) return;
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerMove(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
@@ -714,18 +750,24 @@ export class WaverElement extends HTMLElement {
       this.render();
     });
     canvas.addEventListener("pointerleave", () => {
-      if (this.interactionLocked()) return;
+      if (this.interactionLocked() || this.isMultiTouchActive()) return;
       this.pointerController.clearHover();
       this.hoverPixel = null;
       this.render();
     });
+    const releaseTouchPointer = (e: PointerEvent) => {
+      if (e.pointerType === "touch") this.activeTouchPointerIds.delete(e.pointerId);
+    };
     canvas.addEventListener("pointerup", (e) => {
-      if (this.interactionLocked()) return;
+      const wasMultiTouch = this.isMultiTouchActive();
+      releaseTouchPointer(e);
+      if (this.interactionLocked() || wasMultiTouch) return;
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerUp(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
       this.render();
     });
+    canvas.addEventListener("pointercancel", releaseTouchPointer);
     canvas.addEventListener(
       "wheel",
       (e) => {
@@ -743,6 +785,37 @@ export class WaverElement extends HTMLElement {
       },
       { passive: false }
     );
+
+    const syncActiveTouches = (e: TouchEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      this.activeTouches = Array.from(e.touches).map((t) => ({ identifier: t.identifier, pixel: t.clientX - rect.left }));
+      this.touchGestureController.setActiveTouches(this.activeTouches);
+    };
+    canvas.addEventListener(
+      "touchstart",
+      (e) => {
+        if (this.interactionLocked()) return;
+        // The handoff away from single-finger selection (cancelDrag) happens synchronously in the
+        // pointerdown handler above, since it fires before this touchstart does for the 2nd finger.
+        if (e.touches.length >= 2) e.preventDefault();
+        syncActiveTouches(e);
+      },
+      { passive: false }
+    );
+    canvas.addEventListener(
+      "touchmove",
+      (e) => {
+        if (this.interactionLocked() || e.touches.length < 2) return;
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const points: TouchPoint[] = Array.from(e.touches).map((t) => ({ identifier: t.identifier, pixel: t.clientX - rect.left }));
+        const next = this.touchGestureController.handleTouchMove(points);
+        if (next) this.setZoom(next, false);
+      },
+      { passive: false }
+    );
+    canvas.addEventListener("touchend", syncActiveTouches);
+    canvas.addEventListener("touchcancel", syncActiveTouches);
   }
 
   private attachRulerListeners(): void {

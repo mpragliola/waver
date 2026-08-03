@@ -30,6 +30,7 @@ export class PointerController {
   private pointerDownX = 0;
   private didDrag = false;
   private hoverEdge: "start" | "end" | null = null;
+  private selectionBeforeDrag: SelectionRange | null = null;
 
   constructor(callbacks: PointerControllerCallbacks) {
     this.callbacks = callbacks;
@@ -40,6 +41,7 @@ export class PointerController {
     this.didDrag = false;
     const zoom = this.callbacks.getZoom();
     const selection = this.callbacks.getSelection();
+    this.selectionBeforeDrag = selection;
     const total = this.callbacks.getTotalSamples();
     const toPixel = (s: number) => sampleToPixel(s, zoom);
 
@@ -129,6 +131,18 @@ export class PointerController {
   /** Clears hover state, e.g. when the pointer leaves the canvas. */
   clearHover(): void {
     this.hoverEdge = null;
+  }
+
+  /**
+   * Aborts an in-progress drag (e.g. a second touch joined mid-gesture, handing off to
+   * pinch/pan), reverting the selection to what it was when the drag started.
+   */
+  cancelDrag(): void {
+    if (this.dragMode && this.didDrag) {
+      this.callbacks.setSelection(this.selectionBeforeDrag, false);
+    }
+    this.dragMode = null;
+    this.didDrag = false;
   }
 
   /** Edge to accent in the renderer: the one being drag-resized, or hovered when idle. */

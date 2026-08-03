@@ -63,7 +63,7 @@ describe("RecorderEngine", () => {
     vi.stubGlobal("navigator", { mediaDevices: { getUserMedia } });
     vi.stubGlobal(
       "AudioContext",
-      vi.fn(() => {
+      vi.fn(function () {
         const ctx = new FakeAudioContext();
         contexts.push(ctx);
         return ctx;

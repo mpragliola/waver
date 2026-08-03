@@ -76,7 +76,11 @@ export interface WaverOptions {
   recordButton: ControlState;
   /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */
   viewMode: ViewMode;
-  /** Viewport behavior while recording. Applies only during capture; playback is unaffected. */
+  /**
+   * Viewport behavior while recording. Applies only during capture: the moment `stopRecording()`
+   * loads the captured audio, the viewport always resets to a full zoomed-out view of the whole
+   * clip regardless of this setting.
+   */
   recordViewMode: RecordViewMode;
   /** Width (seconds) of the visible window in `"scroll"` record mode. Ignored by the other record modes. */
   recordWindowSeconds: number;

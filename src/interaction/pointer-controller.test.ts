@@ -111,4 +111,37 @@ describe("PointerController", () => {
     expect(selection).toBeNull();
     Date.now = now;
   });
+
+  it("cancelDrag reverts a new selection created by an in-progress create-drag", () => {
+    controller.handlePointerDown(50);
+    controller.handlePointerMove(80);
+    expect(selection).not.toBeNull();
+    controller.cancelDrag();
+    expect(selection).toBeNull();
+  });
+
+  it("cancelDrag reverts a resize-in-progress to the pre-drag selection", () => {
+    selection = { startSample: 500, endSample: 800 };
+    controller.handlePointerDown(50); // start edge
+    controller.handlePointerMove(30);
+    expect(selection).toEqual({ startSample: 300, endSample: 800 });
+    controller.cancelDrag();
+    expect(selection).toEqual({ startSample: 500, endSample: 800 });
+  });
+
+  it("cancelDrag is a no-op when no drag threshold was crossed (plain press)", () => {
+    selection = { startSample: 500, endSample: 800 };
+    controller.handlePointerDown(65);
+    controller.cancelDrag();
+    expect(selection).toEqual({ startSample: 500, endSample: 800 });
+  });
+
+  it("cancelDrag then a fresh pointer down/up still works normally", () => {
+    controller.handlePointerDown(50);
+    controller.handlePointerMove(80);
+    controller.cancelDrag();
+    controller.handlePointerDown(20);
+    controller.handlePointerUp(20);
+    expect(cursor).toBe(200);
+  });
 });

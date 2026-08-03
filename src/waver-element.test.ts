@@ -89,7 +89,12 @@ describe("WaverElement", () => {
       vi.stubGlobal("navigator", {
         mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
       });
-      vi.stubGlobal("AudioContext", vi.fn(() => makeFakeAudioContext()));
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return makeFakeAudioContext();
+        })
+      );
 
       await el.startRecording();
       expect(el.isRecording()).toBe(true);
@@ -291,12 +296,14 @@ describe("WaverElement", () => {
       const el = mount();
       vi.stubGlobal(
         "AudioContext",
-        vi.fn(() => ({
-          ...makeFakeAudioContext(),
-          decodeAudioData: vi.fn(async () => {
-            throw new Error("bad file");
-          }),
-        }))
+        vi.fn(function () {
+          return {
+            ...makeFakeAudioContext(),
+            decodeAudioData: vi.fn(async () => {
+              throw new Error("bad file");
+            }),
+          };
+        })
       );
 
       const onError = vi.fn();
@@ -320,7 +327,12 @@ describe("WaverElement", () => {
       vi.stubGlobal("navigator", {
         mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
       });
-      vi.stubGlobal("AudioContext", vi.fn(() => makeFakeAudioContext()));
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return makeFakeAudioContext();
+        })
+      );
     }
 
     it("startRecording() flips isRecording() true and emits recordstart", async () => {
@@ -480,3 +492,81 @@ function makeFakeMediaStream() {
     getTracks: () => [{ stop: vi.fn() }],
   };
 }
+
+describe("recordViewMode reaches the recording viewport", () => {
+  let stubs: ReturnType<typeof installDomStubs>;
+
+  beforeEach(() => {
+    stubs = installDomStubs(300, 100);
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    stubs.restore();
+  });
+
+  /**
+   * Drives the real capture path: startRecording() wires appendRecordedChunk() to the
+   * ScriptProcessorNode, so firing onaudioprocess is what a live mic does. Records past
+   * recordWindowSeconds so "scroll" has actually outgrown its window.
+   */
+  async function recordPast(mode: "flat" | "zoom-out" | "scroll", seconds: number) {
+    const sampleRate = 44100;
+    const context = makeFakeAudioContext(sampleRate);
+    vi.stubGlobal("navigator", {
+      mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+    });
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return context;
+      })
+    );
+
+    const el = mount();
+    el.configure({ recordViewMode: mode, recordWindowSeconds: 2 });
+    await el.startRecording();
+
+    const processor = context.createScriptProcessor.mock.results.at(-1)!.value;
+    const chunk = new Float32Array(sampleRate);
+    for (let i = 0; i < seconds; i++) {
+      processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => chunk } });
+    }
+    return el;
+  }
+
+  it("gives scroll a different viewport than zoom-out once past the window", async () => {
+    const scroll = await recordPast("scroll", 15);
+    const scrollZoom = scroll.getZoom();
+    document.body.innerHTML = "";
+
+    const zoomOut = await recordPast("zoom-out", 15);
+    const zoomOutZoom = zoomOut.getZoom();
+
+    expect(scrollZoom).not.toEqual(zoomOutZoom);
+  });
+
+  it("keeps scroll pinned to the configured window instead of spanning the whole recording", async () => {
+    const el = await recordPast("scroll", 15);
+    const { samplesPerPixel } = el.getZoom();
+    // 2s window across 300px => 44100*2/300 samples per pixel.
+    expect(samplesPerPixel).toBeCloseTo((44100 * 2) / 300, 5);
+  });
+
+  it("draws nothing while recording in flat mode", async () => {
+    const el = await recordPast("flat", 15);
+    stubs.flushUntilIdle();
+    const canvas = el.shadowRoot!.querySelector(".waver-waveform") as HTMLCanvasElement;
+    const ctx = stubs.ctxByCanvas.get(canvas)!;
+    expect(ctx.stroke).not.toHaveBeenCalled();
+  });
+
+  it("hides the whole wave stack (ruler and minimap included) during flat capture", async () => {
+    const el = await recordPast("flat", 3);
+    stubs.flushUntilIdle();
+    const shadow = el.shadowRoot!;
+    expect((shadow.querySelector(".waver-wave-stack") as HTMLElement).style.display).toBe("none");
+    expect((shadow.querySelector(".waver-ruler") as HTMLElement).style.display).toBe("none");
+    expect((shadow.querySelector(".waver-minimap") as HTMLElement).style.display).toBe("none");
+  });
+});
