@@ -48,6 +48,13 @@ export type ViewMode = "waveform" | "spectrogram";
 /** Visibility/interactivity of a built-in overlay control: rendered and clickable, rendered greyed out, or not rendered at all. */
 export type ControlState = "enabled" | "disabled" | "hidden";
 
+/**
+ * Viewport behavior while recording.
+ * `"flat"` — draw no waveform at all. `"zoom-out"` — always span 0 → record head, compressing as it grows.
+ * `"scroll"` — span 0 → head until the recording outgrows `recordWindowSeconds`, then slide a fixed-width window.
+ */
+export type RecordViewMode = "flat" | "zoom-out" | "scroll";
+
 export interface WaverOptions {
   /** Total widget height in CSS px, or `"auto"` to inherit from the host element's rendered height (CSS). */
   height: number | "auto";
@@ -69,6 +76,10 @@ export interface WaverOptions {
   recordButton: ControlState;
   /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */
   viewMode: ViewMode;
+  /** Viewport behavior while recording. Applies only during capture; playback is unaffected. */
+  recordViewMode: RecordViewMode;
+  /** Width (seconds) of the visible window in `"scroll"` record mode. Ignored by the other record modes. */
+  recordWindowSeconds: number;
   /** STFT window size in samples, must be a power of two. Larger = finer frequency resolution, coarser time resolution. */
   spectrogramFftSize: number;
   /** STFT hop size in samples (step between windows). Smaller = finer time resolution, more compute. */

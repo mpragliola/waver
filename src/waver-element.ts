@@ -8,7 +8,7 @@ import { normalizeSelection } from "./core/selection";
 import { SpectrogramCache, readVisibleSpectrogramColumns } from "./core/spectrogram-cache";
 import { darkTheme, resolveTheme } from "./core/theme";
 import type { SelectionEventDetail, SelectionRange, ViewMode, WaverEventMap, WaverOptions, WaverTheme, ZoomState } from "./core/types";
-import { clampOffset, fullZoom, visibleSampleRange, type ViewportConfig } from "./core/viewport";
+import { clampOffset, fullZoom, recordZoom, visibleSampleRange, type ViewportConfig } from "./core/viewport";
 import { PointerController } from "./interaction/pointer-controller";
 import { applyWheel } from "./interaction/wheel-controller";
 import { setupHiDPICanvas } from "./render/canvas-utils";
@@ -45,6 +45,8 @@ const DEFAULT_OPTIONS: WaverOptions = {
   loadButton: "enabled",
   recordButton: "enabled",
   viewMode: "waveform",
+  recordViewMode: "scroll",
+  recordWindowSeconds: 10,
   spectrogramFftSize: 2048,
   spectrogramHop: 512,
   spectrogramFreqBins: 128,
@@ -335,7 +337,11 @@ export class WaverElement extends HTMLElement {
   private appendRecordedChunk(chunk: Float32Array): void {
     this.recordingBuffer.push(chunk);
     this.samples = this.recordingBuffer.view();
-    this.zoom = fullZoom(this.viewportConfig());
+    this.zoom = recordZoom(
+      this.opts.recordViewMode,
+      this.viewportConfig(),
+      this.opts.recordWindowSeconds * this.sampleRate
+    );
     this.render();
   }
 
@@ -572,7 +578,10 @@ export class WaverElement extends HTMLElement {
     this.overlayCtx = setupHiDPICanvas(this.overlayCanvas, width, waveHeight);
     const range = visibleSampleRange(this.zoom, width);
 
-    const hasWave = this.samples.length > 0;
+    // `"flat"` record mode keeps the canvas empty (background + ruler only) while capturing; the
+    // samples are still accumulating, they just aren't drawn until stopRecording() loads them.
+    const suppressWave = this.recordingState === "recording" && this.opts.recordViewMode === "flat";
+    const hasWave = this.samples.length > 0 && !suppressWave;
 
     if (this.opts.viewMode === "spectrogram") {
       const spectrogramData = hasWave
@@ -679,14 +688,25 @@ export class WaverElement extends HTMLElement {
     }
   }
 
+  /**
+   * Auto-follow in `"scroll"`/`"zoom-out"` record modes overwrites `this.zoom` on every captured
+   * chunk, so any manual zoom/scroll/seek during recording would be fought and undone within
+   * milliseconds. Interaction is locked outright rather than adding a "user broke follow" state.
+   */
+  private interactionLocked(): boolean {
+    return this.recordingState === "recording";
+  }
+
   private attachWaveformListeners(): void {
     const canvas = this.waveformCanvas;
     canvas.addEventListener("pointerdown", (e) => {
+      if (this.interactionLocked()) return;
       canvas.setPointerCapture(e.pointerId);
       this.pointerController.handlePointerDown(this.pixelFromEvent(e));
       canvas.style.cursor = this.pointerController.getHoverCursor(this.pixelFromEvent(e));
     });
     canvas.addEventListener("pointermove", (e) => {
+      if (this.interactionLocked()) return;
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerMove(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
@@ -694,11 +714,13 @@ export class WaverElement extends HTMLElement {
       this.render();
     });
     canvas.addEventListener("pointerleave", () => {
+      if (this.interactionLocked()) return;
       this.pointerController.clearHover();
       this.hoverPixel = null;
       this.render();
     });
     canvas.addEventListener("pointerup", (e) => {
+      if (this.interactionLocked()) return;
       const pixel = this.pixelFromEvent(e);
       this.pointerController.handlePointerUp(pixel);
       canvas.style.cursor = this.pointerController.getHoverCursor(pixel);
@@ -708,6 +730,7 @@ export class WaverElement extends HTMLElement {
       "wheel",
       (e) => {
         e.preventDefault();
+        if (this.interactionLocked()) return;
         const next = applyWheel(
           this.zoom,
           { deltaY: e.deltaY, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, pivotPixel: this.pixelFromEvent(e) },
@@ -731,17 +754,20 @@ export class WaverElement extends HTMLElement {
 
     let dragging = false;
     el.addEventListener("pointerdown", (e) => {
+      if (this.interactionLocked()) return;
       dragging = true;
       el.setPointerCapture(e.pointerId);
       seekTo(this.pixelFromEvent(e, el));
     });
     el.addEventListener("pointermove", (e) => {
+      if (this.interactionLocked()) return;
       const pixel = this.pixelFromEvent(e, el);
       this.hoverPixel = pixel;
       this.render();
       if (dragging) seekTo(pixel);
     });
     el.addEventListener("pointerleave", () => {
+      if (this.interactionLocked()) return;
       this.hoverPixel = null;
       this.render();
     });
@@ -763,12 +789,13 @@ export class WaverElement extends HTMLElement {
 
     let dragging = false;
     canvas.addEventListener("pointerdown", (e) => {
+      if (this.interactionLocked()) return;
       dragging = true;
       canvas.setPointerCapture(e.pointerId);
       moveViewportTo(this.pixelFromEvent(e, canvas), true);
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
+      if (!dragging || this.interactionLocked()) return;
       moveViewportTo(this.pixelFromEvent(e, canvas), false);
     });
     canvas.addEventListener("pointerup", () => {

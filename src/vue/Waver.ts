@@ -1,5 +1,13 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from "vue";
-import type { ControlState, RulerTimeFormat, SelectionRange, ViewMode, WaverOptions, ZoomState } from "../core/types";
+import type {
+  ControlState,
+  RecordViewMode,
+  RulerTimeFormat,
+  SelectionRange,
+  ViewMode,
+  WaverOptions,
+  ZoomState,
+} from "../core/types";
 import { defineWaverElement, type WaverElement } from "../waver-element";
 
 defineWaverElement();
@@ -20,6 +28,8 @@ export const Waver = defineComponent({
     loadButton: { type: String as PropType<ControlState>, default: undefined },
     recordButton: { type: String as PropType<ControlState>, default: undefined },
     viewMode: { type: String as PropType<ViewMode>, default: undefined },
+    recordViewMode: { type: String as PropType<RecordViewMode>, default: undefined },
+    recordWindowSeconds: { type: Number as PropType<number>, default: undefined },
     spectrogramFftSize: { type: Number as PropType<number>, default: undefined },
     spectrogramHop: { type: Number as PropType<number>, default: undefined },
     spectrogramFreqBins: { type: Number as PropType<number>, default: undefined },
@@ -83,6 +93,8 @@ export const Waver = defineComponent({
       if (props.loadButton !== undefined) opts.loadButton = props.loadButton;
       if (props.recordButton !== undefined) opts.recordButton = props.recordButton;
       if (props.viewMode !== undefined) opts.viewMode = props.viewMode;
+      if (props.recordViewMode !== undefined) opts.recordViewMode = props.recordViewMode;
+      if (props.recordWindowSeconds !== undefined) opts.recordWindowSeconds = props.recordWindowSeconds;
       if (props.spectrogramFftSize !== undefined) opts.spectrogramFftSize = props.spectrogramFftSize;
       if (props.spectrogramHop !== undefined) opts.spectrogramHop = props.spectrogramHop;
       if (props.spectrogramFreqBins !== undefined) opts.spectrogramFreqBins = props.spectrogramFreqBins;

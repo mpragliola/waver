@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { clampOffset, fullZoom, pixelToSample, sampleToPixel, scrollBy, visibleSampleRange, zoomAt } from "./viewport";
+import {
+  clampOffset,
+  fullZoom,
+  pixelToSample,
+  recordZoom,
+  sampleToPixel,
+  scrollBy,
+  visibleSampleRange,
+  zoomAt,
+} from "./viewport";
 import { MIN_SAMPLES_PER_PIXEL } from "./peaks";
 
 const config = { totalSamples: 1000, pixelWidth: 100 };
@@ -75,5 +84,56 @@ describe("scrollBy / clampOffset", () => {
   it("clampOffset is a no-op for an already-valid zoom state", () => {
     const zoom = { samplesPerPixel: 1, offsetSample: 10 };
     expect(clampOffset(zoom, config)).toEqual(zoom);
+  });
+});
+
+describe("recordZoom", () => {
+  it("spans the whole recording in zoom-out mode", () => {
+    expect(recordZoom("zoom-out", config, 200)).toEqual(fullZoom(config));
+  });
+
+  it("ignores the window width in zoom-out mode", () => {
+    expect(recordZoom("zoom-out", config, 200)).toEqual(recordZoom("zoom-out", config, 5000));
+  });
+
+  it("spans the whole recording in scroll mode while it fits the window", () => {
+    // 600 recorded samples, 800-sample window: nothing to scroll yet.
+    const short = { totalSamples: 600, pixelWidth: 100 };
+    expect(recordZoom("scroll", short, 800)).toEqual(fullZoom(short));
+  });
+
+  it("still spans the whole recording at exactly the window width", () => {
+    const exact = { totalSamples: 800, pixelWidth: 100 };
+    expect(recordZoom("scroll", exact, 800)).toEqual(fullZoom(exact));
+  });
+
+  it("locks resolution and tracks the head once the recording outgrows the window", () => {
+    // 1000 recorded samples, 400-sample window across 100px.
+    const next = recordZoom("scroll", config, 400);
+    expect(next.samplesPerPixel).toBe(4);
+    expect(next.offsetSample).toBe(600);
+  });
+
+  it("holds resolution steady as the recording grows past the window", () => {
+    const a = recordZoom("scroll", { totalSamples: 1000, pixelWidth: 100 }, 400);
+    const b = recordZoom("scroll", { totalSamples: 9000, pixelWidth: 100 }, 400);
+    expect(b.samplesPerPixel).toBe(a.samplesPerPixel);
+    expect(b.offsetSample).toBe(8600);
+  });
+
+  it("falls back to zoom-out for a non-positive window", () => {
+    expect(recordZoom("scroll", config, 0)).toEqual(fullZoom(config));
+    expect(recordZoom("scroll", config, -100)).toEqual(fullZoom(config));
+  });
+
+  it("falls back to zoom-out for a non-finite window", () => {
+    expect(recordZoom("scroll", config, Number.NaN)).toEqual(fullZoom(config));
+    expect(recordZoom("scroll", config, Number.POSITIVE_INFINITY)).toEqual(fullZoom(config));
+  });
+
+  it("returns a finite zoom state in flat mode", () => {
+    const next = recordZoom("flat", config, 400);
+    expect(Number.isFinite(next.samplesPerPixel)).toBe(true);
+    expect(Number.isFinite(next.offsetSample)).toBe(true);
   });
 });
