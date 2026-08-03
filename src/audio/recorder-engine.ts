@@ -18,9 +18,11 @@ export class RecorderEngine {
    * caller-supplied stream (WebRTC track, shared device stream, etc.) is theirs to manage. */
   private ownsStream = false;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
+  private splitterNode: ChannelSplitterNode | null = null;
   private processor: ScriptProcessorNode | null = null;
   private silentGain: GainNode | null = null;
   private recording = false;
+  private inputChannelCount = 1;
   private events: RecorderEngineEvents;
 
   constructor(events: RecorderEngineEvents = {}) {
@@ -35,6 +37,11 @@ export class RecorderEngine {
     return this.context?.sampleRate ?? 44100;
   }
 
+  /** Channels the opened source actually has. Valid after start(); 1 before. */
+  getInputChannelCount(): number {
+    return this.inputChannelCount;
+  }
+
   /** Valid after start(); remains open after stop() so the caller can reuse it for playback. */
   getContext(): AudioContext | null {
     return this.context;
@@ -45,8 +52,12 @@ export class RecorderEngine {
    * device chosen by the host app, a WebRTC remote track, a screen-share audio track, etc.);
    * Waver has no business picking an input device itself. Omit it to fall back to the browser's
    * default mic via getUserMedia.
+   *
+   * `channelIndex` picks which channel of a multi-channel source to keep (0-based) — picked, not
+   * summed, since summing a mic on one input with a silent other input costs 6 dB and can comb the
+   * signal. Falls back to channel 0 if the source has fewer channels than requested.
    */
-  async start(stream?: MediaStream): Promise<void> {
+  async start(stream?: MediaStream, channelIndex = 0): Promise<void> {
     if (this.recording) return;
 
     const mediaStream = stream ?? (await navigator.mediaDevices.getUserMedia({ audio: true }));
@@ -55,6 +66,18 @@ export class RecorderEngine {
     const processor = context.createScriptProcessor(4096, 1, 1);
     const silentGain = context.createGain();
     silentGain.gain.value = 0;
+
+    this.inputChannelCount = sourceNode.channelCount;
+    const activeChannel = channelIndex > 0 && channelIndex < this.inputChannelCount ? channelIndex : 0;
+
+    let splitterNode: ChannelSplitterNode | null = null;
+    if (activeChannel > 0) {
+      splitterNode = context.createChannelSplitter(this.inputChannelCount);
+      sourceNode.connect(splitterNode);
+      splitterNode.connect(processor, activeChannel);
+    } else {
+      sourceNode.connect(processor);
+    }
 
     processor.onaudioprocess = (e) => {
       const input = e.inputBuffer.getChannelData(0);
@@ -65,7 +88,6 @@ export class RecorderEngine {
 
     // ScriptProcessorNode only fires onaudioprocess while connected through to a destination;
     // route through a silent gain so the mic is never actually audible.
-    sourceNode.connect(processor);
     processor.connect(silentGain);
     silentGain.connect(context.destination);
 
@@ -73,6 +95,7 @@ export class RecorderEngine {
     this.ownsStream = stream === undefined;
     this.context = context;
     this.sourceNode = sourceNode;
+    this.splitterNode = splitterNode;
     this.processor = processor;
     this.silentGain = silentGain;
     this.recording = true;
@@ -96,10 +119,12 @@ export class RecorderEngine {
 
   private releaseCaptureNodes(): void {
     this.processor?.disconnect();
+    this.splitterNode?.disconnect();
     this.sourceNode?.disconnect();
     this.silentGain?.disconnect();
     if (this.ownsStream) this.stream?.getTracks().forEach((t) => t.stop());
     this.processor = null;
+    this.splitterNode = null;
     this.sourceNode = null;
     this.silentGain = null;
     this.stream = null;
