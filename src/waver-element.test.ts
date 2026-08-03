@@ -112,6 +112,42 @@ describe("WaverElement", () => {
       expect(cancelBtn.style.display).not.toBe("none");
       expect(cancelBtn.disabled).toBe(false);
     });
+
+    it("hides the cancel button when set to 'hidden', even with audio loaded", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      el.configure({ cancelButton: "hidden" });
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).toBe("none");
+    });
+
+    it("renders the cancel button disabled (visible, unclickable) when set to 'disabled'", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      el.configure({ cancelButton: "disabled" });
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).not.toBe("none");
+      expect(cancelBtn.disabled).toBe(true);
+    });
+
+    it("stays hidden while a recording is in progress even though hasAudio() may be false", async () => {
+      const el = mount();
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [] }) as unknown as MediaStream) },
+      });
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+      await el.startRecording();
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).toBe("none");
+    });
+
+    it("has a static aria-label regardless of state", () => {
+      const el = mount();
+      const cancelBtn = el.shadowRoot!.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.getAttribute("aria-label")).toBe("Cancel");
+    });
   });
 
   describe("loadSamples / loadAudioBuffer", () => {

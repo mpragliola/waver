@@ -2,7 +2,7 @@ import { AudioEngine } from "./audio/audio-engine";
 import { RecorderEngine } from "./audio/recorder-engine";
 import { GrowableFloat32Buffer } from "./core/growable-buffer";
 import { ensureGoogleFont } from "./core/font-loader";
-import { micIcon, stopIcon, uploadIcon } from "./core/icons";
+import { closeIcon, micIcon, stopIcon, uploadIcon } from "./core/icons";
 import { createPeaksCache } from "./core/peaks";
 import { normalizeSelection } from "./core/selection";
 import { SpectrogramCache, readVisibleSpectrogramColumns } from "./core/spectrogram-cache";
@@ -97,6 +97,7 @@ export class WaverElement extends HTMLElement {
   private emptyOverlay: HTMLDivElement;
   private loadButtonEl: HTMLButtonElement;
   private recordButtonEl: HTMLButtonElement;
+  private cancelButtonEl: HTMLButtonElement;
   private recordingBar: HTMLDivElement;
   private recordingTimeEl: HTMLSpanElement;
   private fileInput: HTMLInputElement;
@@ -178,6 +179,12 @@ export class WaverElement extends HTMLElement {
     this.recordButtonEl.innerHTML = `${micIcon}<span>Record</span>`;
     this.emptyOverlay.append(this.loadButtonEl, this.recordButtonEl);
 
+    this.cancelButtonEl = document.createElement("button");
+    this.cancelButtonEl.type = "button";
+    this.cancelButtonEl.className = "waver-cancel-btn";
+    this.cancelButtonEl.innerHTML = closeIcon;
+    this.cancelButtonEl.setAttribute("aria-label", "Cancel");
+
     this.recordingBar = document.createElement("div");
     this.recordingBar.className = "waver-recording-bar";
     this.recordingTimeEl = document.createElement("span");
@@ -199,7 +206,15 @@ export class WaverElement extends HTMLElement {
     this.fileInput.accept = "audio/*";
     this.fileInput.className = "waver-file-input";
 
-    this.container.append(this.rulerCanvas, this.waveStack, this.minimapCanvas, this.emptyOverlay, this.recordingBar, this.fileInput);
+    this.container.append(
+      this.rulerCanvas,
+      this.waveStack,
+      this.minimapCanvas,
+      this.emptyOverlay,
+      this.cancelButtonEl,
+      this.recordingBar,
+      this.fileInput
+    );
     this.shadow.append(styleSheet(), this.container);
 
     this.loadButtonEl.addEventListener("click", () => {
@@ -211,6 +226,10 @@ export class WaverElement extends HTMLElement {
       void this.startRecording();
     });
     stopButton.addEventListener("click", () => this.stopRecording());
+    this.cancelButtonEl.addEventListener("click", () => {
+      if (this.opts.cancelButton !== "enabled") return;
+      this.openCancelConfirm();
+    });
     this.fileInput.addEventListener("change", () => void this.handleFileInputChange());
 
     this.pointerController = new PointerController({
@@ -295,6 +314,10 @@ export class WaverElement extends HTMLElement {
     this.updateOverlay();
     this.emit("waver:reset", {});
     this.render();
+  }
+
+  private openCancelConfirm(): void {
+    // implemented in Task 3
   }
 
   loadAudioBuffer(buffer: AudioBuffer, context: AudioContext): void {
@@ -475,6 +498,10 @@ export class WaverElement extends HTMLElement {
     this.recordButtonEl.disabled = this.opts.recordButton === "disabled";
     this.emptyOverlay.style.display = loadVisible || recordVisible ? "flex" : "none";
     this.recordingBar.style.display = this.recordingState === "recording" ? "flex" : "none";
+
+    const cancelVisible = this.hasAudio() && this.recordingState !== "recording" && this.opts.cancelButton !== "hidden";
+    this.cancelButtonEl.style.display = cancelVisible ? "" : "none";
+    this.cancelButtonEl.disabled = this.opts.cancelButton === "disabled";
   }
 
   /** Sets the viewport. Eases to the target over ZOOM_ANIM_MS unless `animate` is false (e.g. active drags). */
@@ -982,6 +1009,17 @@ function styleSheet(): HTMLStyleElement {
     .waver-action-btn:active:not(:disabled) { transform: scale(0.96); }
     .waver-action-btn--record { color: #E53E3E; border-color: #E53E3E; }
     .waver-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .waver-cancel-btn {
+      position: absolute; top: 8px; right: 8px; z-index: 6;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; padding: 0; border-radius: 50%; border: none;
+      background: transparent; color: inherit; opacity: 0.5; cursor: pointer;
+      transition: opacity 120ms ease, background-color 120ms ease, transform 120ms ease;
+    }
+    .waver-cancel-btn:hover:not(:disabled) { opacity: 1; background: rgba(127, 127, 127, 0.15); }
+    .waver-cancel-btn:active:not(:disabled) { transform: scale(0.96); }
+    .waver-cancel-btn:disabled { opacity: 0.25; cursor: not-allowed; }
 
     .waver-recording-bar {
       position: absolute; inset: 0; z-index: 5; display: none;
