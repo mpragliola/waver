@@ -45,6 +45,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   rulerHeight: 16,
   loadButton: "enabled",
   recordButton: "enabled",
+  cancelButton: "enabled",
   channelIndex: 0,
   viewMode: "waveform",
   recordViewMode: "scroll",

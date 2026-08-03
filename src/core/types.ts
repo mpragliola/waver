@@ -74,6 +74,8 @@ export interface WaverOptions {
    * Use `"disabled"` when several Waver instances share one mic and only one may record at a time.
    */
   recordButton: ControlState;
+  /** State of the built-in "Cancel" (X) button shown top-right once audio is loaded. Confirms before discarding via reset(). */
+  cancelButton: ControlState;
   /**
    * Which channel of a multi-channel recording source to keep, 0-based. Used by
    * startRecording() (including the built-in Record button) when called with no explicit

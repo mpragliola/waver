@@ -101,6 +101,19 @@ describe("WaverElement", () => {
     });
   });
 
+  describe("configure() — cancelButton ControlState", () => {
+    it("defaults to 'enabled': cancel button hidden with no audio, visible once loaded", () => {
+      const el = mount();
+      const shadow = el.shadowRoot!;
+      const cancelBtn = shadow.querySelector(".waver-cancel-btn") as HTMLButtonElement;
+      expect(cancelBtn.style.display).toBe("none");
+
+      el.loadSamples(new Float32Array(1000), 44100);
+      expect(cancelBtn.style.display).not.toBe("none");
+      expect(cancelBtn.disabled).toBe(false);
+    });
+  });
+
   describe("loadSamples / loadAudioBuffer", () => {
     it("loadSamples sets hasAudio() true and resets selection/cursor/zoom", () => {
       const el = mount();
