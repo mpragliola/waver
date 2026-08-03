@@ -258,4 +258,9 @@ npm run test          # vitest run
 npm run test:watch    # vitest watch mode
 npm run coverage      # vitest with coverage
 npm run typecheck     # tsc --noEmit
+npm run e2e           # Playwright end-to-end suite against the demo app (chromium)
+npm run e2e:ui         # Playwright UI mode
 ```
+
+CI (`.github/workflows/ci.yml`) runs typecheck, unit/integration tests, the build, and the e2e
+suite on every push/PR to `main`.
