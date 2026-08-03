@@ -424,6 +424,31 @@ describe("WaverElement", () => {
       expect(el.getSamples()).toEqual(data);
       expect(el.getSampleRate()).toBe(48000);
     });
+
+    it("returns in-progress captured samples while a recording is active", async () => {
+      const el = mount();
+      const ctx = makeFakeAudioContext();
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return ctx;
+        })
+      );
+
+      await el.startRecording();
+      expect(el.getSamples()).toEqual(new Float32Array(0));
+
+      const processor = ctx.createScriptProcessor.mock.results[0].value as {
+        onaudioprocess: ((e: unknown) => void) | null;
+      };
+      const inputData = new Float32Array([0.1, 0.2, 0.3]);
+      processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => inputData } });
+
+      expect(el.getSamples()).toEqual(inputData);
+    });
   });
 
   describe("recording", () => {
