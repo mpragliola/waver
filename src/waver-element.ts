@@ -834,7 +834,7 @@ function styleSheet(): HTMLStyleElement {
     }
     .waver-action-btn {
       display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 16px; border-radius: 999px; border: 1px solid currentColor;
+      padding: 8px 16px; border-radius: 999px; border: 2px solid currentColor;
       background: transparent; color: inherit; font: inherit; font-size: 13px; line-height: 1;
       cursor: pointer; transition: background-color 120ms ease, transform 120ms ease;
     }

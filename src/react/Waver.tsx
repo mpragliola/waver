@@ -133,5 +133,5 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onSpectrogramReady,
   ]);
 
-  return <wave-r ref={elRef as never} className={className} style={style as never} />;
+  return <wave-r ref={elRef as never} class={className as never} style={style as never} />;
 });

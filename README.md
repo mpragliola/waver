@@ -111,8 +111,9 @@ waverRef.value?.play();
 
 Note: the Vue wrapper exposes every `WaverOptions` prop directly (`height`, `minimapHeightRatio`,
 `theme`, `showZeroLine`, `roundedCorners`, `showMinimap`, `showRuler`, `rulerTimeFormat`,
-`rulerHeight`, `loadButton`, `recordButton`, `viewMode`, `spectrogramFftSize`, `spectrogramHop`,
-`spectrogramFreqBins`) — or set any of them imperatively via `element.value?.configure({ showRuler: false })`.
+`rulerHeight`, `loadButton`, `recordButton`, `viewMode`, `recordViewMode`, `recordWindowSeconds`,
+`spectrogramFftSize`, `spectrogramHop`, `spectrogramFreqBins`) — or set any of them imperatively via
+`element.value?.configure({ showRuler: false })`.
 
 ## Configurable options (`WaverOptions`)
 
@@ -133,6 +134,8 @@ defaults.
 | `loadButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Load File" button shown while no audio is loaded. |
 | `recordButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Record" button shown while no audio is loaded. Use `"disabled"` when several Waver instances share one mic and only one may record at a time. |
 | `viewMode` | `"waveform" \| "spectrogram"` | `"waveform"` | Main view content. The minimap always stays on waveform regardless of this. |
+| `recordViewMode` | `"flat" \| "zoom-out" \| "scroll"` | `"scroll"` | Viewport behavior while recording. `"flat"` draws no waveform while capturing. `"zoom-out"` always spans 0 → record head, compressing as it grows. `"scroll"` spans 0 → head until it outgrows `recordWindowSeconds`, then slides a fixed-width window. Ignored during playback. |
+| `recordWindowSeconds` | `number` | `10` | Width (seconds) of the visible window in `"scroll"` record mode. Ignored by the other record modes. |
 | `spectrogramFftSize` | `number` | `2048` | STFT window size in samples (power of two). Larger = finer frequency resolution, coarser time resolution. |
 | `spectrogramHop` | `number` | `512` | STFT hop size in samples. Smaller = finer time resolution, more compute. |
 | `spectrogramFreqBins` | `number` | `128` | Number of log-scaled frequency rows the spectrogram is bucketed down to for display. |
@@ -161,6 +164,11 @@ Drive it imperatively with `startRecording()` / `stopRecording()` / `isRecording
 `waver:recordstart` / `waver:recordstop` / `waver:recorderror`. Set `recordButton: "disabled"` to
 grey out (but keep visible) the Record button on other instances while one is actively recording —
 useful when several Waver instances on a page share a single mic and only one may record at a time.
+
+While capturing, the viewport follows `recordViewMode` (`"scroll"` by default, sliding a
+`recordWindowSeconds`-wide window once the recording outgrows it; see the options table above for
+the other modes). Manual zoom/pan/seek is locked during recording since auto-follow would
+immediately override it.
 
 ### Theme (`WaverTheme`)
 
@@ -191,16 +199,20 @@ Built-in themes: `lightTheme`, `darkTheme` (exported from `waver`). Helpers: `re
 | `loadAudioBuffer(buffer: AudioBuffer, context: AudioContext)` | Load audio + set up playback via `AudioEngine`. |
 | `connectExternalAudioNode(node: AudioNode \| null)` | Splice a custom `AudioNode` into the playback signal chain. |
 | `play()` / `stop()` / `togglePlayback()` | Playback controls (host wires its own buttons/shortcuts). |
-| `setZoom(zoom: Partial<ZoomState>)` | Set `{ samplesPerPixel, offsetSample }` (clamped to valid range). |
+| `setZoom(zoom: Partial<ZoomState>, animate = true)` | Set `{ samplesPerPixel, offsetSample }` (clamped to valid range). Eases to the target unless `animate` is `false`. |
 | `zoomToFull()` | Reset zoom to fit the whole waveform. |
-| `setSelection(selection: SelectionRange \| null)` | Set/clear the selection (also used as the loop range). |
-| `setCursorPosition(sample: number)` | Move the playhead without seeking playback. |
+| `setSelection(selection: SelectionRange \| null, final = true)` | Set/clear the selection (also used as the loop range). Pass `final: false` for intermediate updates (e.g. drag) — suppresses the settled `selectionchanged`/`selectionreset` event until a later call commits it. |
+| `setCursorPosition(sample: number, emitEvent = true)` | Move the playhead without seeking playback. Pass `emitEvent: false` to skip the `waver:cursorchange` event. |
 | `getSelection()` / `getCursorPosition()` / `getZoom()` / `getSampleRate()` | Getters. |
 | `setViewMode(mode: "waveform" \| "spectrogram")` | Switch the main view (minimap stays waveform). |
 | `getViewMode()` | Current main view mode. |
 | `startRecording()` | Starts mic capture via the same path as the built-in Record button (triggers the `getUserMedia` permission prompt). |
 | `stopRecording()` | Stops an in-progress recording and loads the captured audio, same as if it had been picked via Load File. |
 | `isRecording()` | Whether a recording is currently in progress. |
+
+React/Vue note: the ref/`expose()` surface mirrors this table (see usage examples above) but currently
+omits `getSampleRate()`; use `element()` (React) / `element` (Vue expose) to reach the underlying
+`WaverElement` for that or any other method not yet forwarded by the wrapper.
 
 ## Events
 
