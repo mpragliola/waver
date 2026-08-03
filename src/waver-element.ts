@@ -989,6 +989,7 @@ function styleSheet(): HTMLStyleElement {
     .waver-action-btn--icon-only {
       padding: 8px; border-radius: 50%; gap: 0;
       width: 34px; height: 34px; justify-content: center;
+      box-sizing: border-box;
     }
     .waver-action-btn--icon-only span { display: none; }
 
