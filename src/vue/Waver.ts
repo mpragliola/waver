@@ -51,6 +51,7 @@ export const Waver = defineComponent({
     loaderror: (_error: Error) => true,
     viewmodechange: (_viewMode: ViewMode) => true,
     spectrogramready: () => true,
+    reset: () => true,
   },
   setup(props, { emit, expose }) {
     const elRef = ref<WaverElement | null>(null);
@@ -68,6 +69,7 @@ export const Waver = defineComponent({
       ["waver:loaderror", ((e: CustomEvent) => emit("loaderror", e.detail.error)) as EventListener],
       ["waver:viewmodechange", ((e: CustomEvent) => emit("viewmodechange", e.detail.viewMode)) as EventListener],
       ["waver:spectrogramready", (() => emit("spectrogramready")) as EventListener],
+      ["waver:reset", (() => emit("reset")) as EventListener],
     ];
 
     onMounted(() => {
@@ -126,6 +128,7 @@ export const Waver = defineComponent({
       togglePlayback: () => elRef.value?.togglePlayback(),
       startRecording: (stream?: MediaStream) => elRef.value?.startRecording(stream),
       stopRecording: () => elRef.value?.stopRecording(),
+      reset: () => elRef.value?.reset(),
       hasAudio: () => elRef.value?.hasAudio() ?? false,
       isRecording: () => elRef.value?.isRecording() ?? false,
       setZoom: (zoom: Partial<ZoomState>, animate?: boolean) => elRef.value?.setZoom(zoom, animate),

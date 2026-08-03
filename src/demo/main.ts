@@ -8,6 +8,7 @@ const statusEl = document.getElementById("status") as HTMLDivElement;
 const playButton = document.getElementById("play") as HTMLButtonElement;
 const zoomFullButton = document.getElementById("zoomFull") as HTMLButtonElement;
 const viewModeButton = document.getElementById("viewMode") as HTMLButtonElement;
+const resetButton = document.getElementById("reset") as HTMLButtonElement;
 const recordViewModeSelect = document.getElementById("recordViewMode") as HTMLSelectElement;
 const inputDeviceSelect = document.getElementById("inputDevice") as HTMLSelectElement;
 
@@ -82,6 +83,7 @@ zoomFullButton.addEventListener("click", () => waver.zoomToFull());
 viewModeButton.addEventListener("click", () => {
   waver.setViewMode(waver.getViewMode() === "waveform" ? "spectrogram" : "waveform");
 });
+resetButton.addEventListener("click", () => waver.reset());
 
 waver.addEventListener("waver:cursorchange", (e) => {
   const detail = (e as CustomEvent).detail;
@@ -90,6 +92,7 @@ waver.addEventListener("waver:cursorchange", (e) => {
 
 waver.addEventListener("waver:recordstart", () => setStatus("Recording…"));
 waver.addEventListener("waver:recordstop", () => setStatus(""));
+waver.addEventListener("waver:reset", () => setStatus(""));
 waver.addEventListener("waver:recorderror", (e) => {
   const detail = (e as CustomEvent).detail;
   setStatus(`Mic access failed: ${(detail.error as Error).message}`);

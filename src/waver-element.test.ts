@@ -129,6 +129,65 @@ describe("WaverElement", () => {
     });
   });
 
+  describe("reset()", () => {
+    it("erases loaded audio, shows the empty overlay again, and emits waver:reset", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      el.setSelection({ startSample: 10, endSample: 20 });
+      const onReset = vi.fn();
+      el.addEventListener("waver:reset", onReset);
+
+      el.reset();
+
+      expect(el.hasAudio()).toBe(false);
+      expect(el.getSelection()).toBeNull();
+      expect(el.getCursorPosition()).toBe(0);
+      const overlay = el.shadowRoot!.querySelector(".waver-empty-overlay") as HTMLElement;
+      expect(overlay.style.display).toBe("flex");
+      expect(onReset).toHaveBeenCalledTimes(1);
+    });
+
+    it("cancels an in-progress recording and returns isRecording() to false", async () => {
+      const el = mount();
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return makeFakeAudioContext();
+        })
+      );
+      await el.startRecording();
+      expect(el.isRecording()).toBe(true);
+
+      el.reset();
+
+      expect(el.isRecording()).toBe(false);
+      expect(el.hasAudio()).toBe(false);
+    });
+
+    it("never stops tracks on a preset inputStream when cancelling a recording", async () => {
+      const el = mount();
+      const track = { stop: vi.fn() };
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return makeFakeAudioContext();
+        })
+      );
+      el.setInputStream({ getTracks: () => [track] } as unknown as MediaStream);
+      await el.startRecording();
+
+      el.reset();
+
+      expect(track.stop).not.toHaveBeenCalled();
+    });
+  });
+
   describe("playback", () => {
     it("play()/stop()/togglePlayback() delegate to the AudioEngine and emit events", () => {
       const el = mount();

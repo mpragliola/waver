@@ -122,4 +122,6 @@ export type WaverEventMap = {
   "waver:viewmodechange": { viewMode: ViewMode };
   /** Fires once the background spectrogram analysis for the current buffer/resolution resolves. */
   "waver:spectrogramready": Record<string, never>;
+  /** Fires when reset() erases loaded/recorded audio and returns to the empty-button state. */
+  "waver:reset": Record<string, never>;
 };

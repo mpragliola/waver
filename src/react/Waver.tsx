@@ -14,6 +14,7 @@ export interface WaverHandle {
   togglePlayback: () => void;
   startRecording: (stream?: MediaStream) => void;
   stopRecording: () => void;
+  reset: () => void;
   hasAudio: () => boolean;
   isRecording: () => boolean;
   setZoom: (zoom: Partial<ZoomState>, animate?: boolean) => void;
@@ -47,6 +48,7 @@ export interface WaverProps extends Partial<WaverOptions> {
   onLoadError?: (error: Error) => void;
   onViewModeChange?: (viewMode: ViewMode) => void;
   onSpectrogramReady?: () => void;
+  onReset?: () => void;
 }
 
 /** React wrapper around the `<wave-r>` custom element. Configure/load data imperatively via the ref. */
@@ -67,6 +69,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onLoadError,
     onViewModeChange,
     onSpectrogramReady,
+    onReset,
     ...options
   } = props;
   const elRef = useRef<WaverElement | null>(null);
@@ -82,6 +85,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       togglePlayback: () => elRef.current?.togglePlayback(),
       startRecording: (stream) => void elRef.current?.startRecording(stream),
       stopRecording: () => elRef.current?.stopRecording(),
+      reset: () => elRef.current?.reset(),
       hasAudio: () => elRef.current?.hasAudio() ?? false,
       isRecording: () => elRef.current?.isRecording() ?? false,
       setZoom: (z, animate) => elRef.current?.setZoom(z, animate),
@@ -124,6 +128,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       ["waver:loaderror", ((e: CustomEvent) => onLoadError?.(e.detail.error)) as EventListener],
       ["waver:viewmodechange", ((e: CustomEvent) => onViewModeChange?.(e.detail.viewMode)) as EventListener],
       ["waver:spectrogramready", (() => onSpectrogramReady?.()) as EventListener],
+      ["waver:reset", (() => onReset?.()) as EventListener],
     ];
     handlers.forEach(([type, handler]) => el.addEventListener(type, handler));
     return () => handlers.forEach(([type, handler]) => el.removeEventListener(type, handler));
@@ -140,6 +145,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onLoadError,
     onViewModeChange,
     onSpectrogramReady,
+    onReset,
   ]);
 
   return <wave-r ref={elRef as never} class={className as never} style={style as never} />;

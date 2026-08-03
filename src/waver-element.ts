@@ -268,6 +268,27 @@ export class WaverElement extends HTMLElement {
     this.render();
   }
 
+  /** Erases any loaded/recorded audio and returns to the empty-button state, cancelling an in-progress recording if any. */
+  reset(): void {
+    if (this.recordingState === "recording") {
+      this.recorderEngine?.cancel();
+      this.recorderEngine = null;
+      this.recordingState = "idle";
+      this.stopRecordingTimerDisplay();
+    }
+    this.recordingBuffer.reset();
+    this.audioEngine?.dispose();
+    this.audioEngine = null;
+    this.samples = new Float32Array(0);
+    this.sampleRate = 44100;
+    this.selection = null;
+    this.cursorSample = 0;
+    this.zoom = fullZoom(this.viewportConfig());
+    this.updateOverlay();
+    this.emit("waver:reset", {});
+    this.render();
+  }
+
   loadAudioBuffer(buffer: AudioBuffer, context: AudioContext): void {
     const mono = buffer.numberOfChannels > 0 ? buffer.getChannelData(0) : new Float32Array(0);
     this.loadSamples(mono, buffer.sampleRate);
