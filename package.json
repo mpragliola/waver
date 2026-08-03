@@ -56,15 +56,18 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^18.3.12",
     "@vitejs/plugin-vue": "^5.1.4",
-    "@vitest/coverage-v8": "^2.1.4",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.11",
     "jsdom": "^25.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.6.3",
-    "vite": "^5.4.10",
+    "vite": "^8.2.0",
     "vite-plugin-dts": "^4.3.0",
-    "vitest": "^2.1.4",
+    "vitest": "^4.1.10",
     "vue": "^3.5.12"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
   }
 }
