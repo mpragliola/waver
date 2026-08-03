@@ -246,6 +246,35 @@ describe("WaverElement", () => {
       cancelBtn.click();
       expect(shadow.activeElement).toBe(keepBtn);
     });
+
+    it("Escape still dismisses the overlay after a disconnect/reconnect cycle", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      document.body.removeChild(el);
+      document.body.appendChild(el);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+      expect(overlay.style.display).not.toBe("none");
+
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+      expect(overlay.style.display).toBe("none");
+    });
+
+    it("closes the confirm overlay if reset() is called externally while it's open", () => {
+      const el = mount();
+      el.loadSamples(new Float32Array(1000), 44100);
+      const { overlay, cancelBtn } = getConfirmParts(el);
+      cancelBtn.click();
+      expect(overlay.style.display).not.toBe("none");
+
+      const onReset = vi.fn();
+      el.addEventListener("waver:reset", onReset);
+      el.reset();
+
+      expect(overlay.style.display).toBe("none");
+      expect(onReset).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("loadSamples / loadAudioBuffer", () => {

@@ -271,7 +271,6 @@ export class WaverElement extends HTMLElement {
     this.confirmOverlayEl.addEventListener("click", (e) => {
       if (e.target === this.confirmOverlayEl) this.closeCancelConfirm();
     });
-    window.addEventListener("keydown", this.handleEscapeKey);
     this.fileInput.addEventListener("change", () => void this.handleFileInputChange());
 
     this.pointerController = new PointerController({
@@ -297,6 +296,7 @@ export class WaverElement extends HTMLElement {
     this.applyTheme(this.theme);
     this.resizeObserver = new ResizeObserver(() => this.render());
     this.resizeObserver.observe(this.container);
+    window.addEventListener("keydown", this.handleEscapeKey);
     this.updateOverlay();
     this.render();
   }
@@ -550,6 +550,10 @@ export class WaverElement extends HTMLElement {
     const cancelVisible = this.hasAudio() && this.recordingState !== "recording" && this.opts.cancelButton !== "hidden";
     this.cancelButtonEl.style.display = cancelVisible ? "" : "none";
     this.cancelButtonEl.disabled = this.opts.cancelButton === "disabled";
+    // The confirm dialog can only meaningfully be open while its trigger button is visible — if
+    // state changed out from under an open dialog (reset(), configure() hiding the button, a
+    // recording starting), strand it closed rather than leaving it floating over stale state.
+    if (!cancelVisible) this.closeCancelConfirm();
   }
 
   /** Sets the viewport. Eases to the target over ZOOM_ANIM_MS unless `animate` is false (e.g. active drags). */
