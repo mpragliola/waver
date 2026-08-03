@@ -72,6 +72,17 @@ describe("React Waver wrapper", () => {
     expect(ref.current?.element()).toBe(container.querySelector("wave-r"));
   });
 
+  it("forwards the hideButtonLabels prop to the element", async () => {
+    const { container } = render(<Waver hideButtonLabels={true} />);
+    const el = container.querySelector("wave-r") as WaverElement;
+    await act(async () => {});
+    const shadow = el.shadowRoot!;
+    const loadBtn = shadow.querySelector(".waver-action-btn:not(.waver-action-btn--record)") as HTMLButtonElement;
+    const recordBtn = shadow.querySelector(".waver-action-btn--record") as HTMLButtonElement;
+    expect(loadBtn.classList.contains("waver-action-btn--icon-only")).toBe(true);
+    expect(recordBtn.classList.contains("waver-action-btn--icon-only")).toBe(true);
+  });
+
   it("forwards the channelIndex prop to the element", async () => {
     const { container } = render(<Waver channelIndex={1} />);
     const el = container.querySelector("wave-r") as WaverElement;
