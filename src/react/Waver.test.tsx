@@ -163,6 +163,50 @@ describe("React Waver wrapper", () => {
     expect(onRecordSuccess).toHaveBeenCalledWith({ durationSample: 200, sampleRate: 48000 });
   });
 
+  it("fires onBeforeLoad with the file when the element emits waver:beforeload", async () => {
+    const onBeforeLoad = vi.fn();
+    const ref = createRef<WaverHandle>();
+    render(<Waver ref={ref} onBeforeLoad={onBeforeLoad} />);
+    await act(async () => {});
+
+    const file = new File([new ArrayBuffer(8)], "test.wav", { type: "audio/wav" });
+    const event = new CustomEvent("waver:beforeload", { detail: { file }, cancelable: true });
+    act(() => {
+      ref.current?.element()?.dispatchEvent(event);
+    });
+
+    expect(onBeforeLoad).toHaveBeenCalledWith(file);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("returning false from onBeforeLoad calls preventDefault() on waver:beforeload", async () => {
+    const ref = createRef<WaverHandle>();
+    render(<Waver ref={ref} onBeforeLoad={() => false} />);
+    await act(async () => {});
+
+    const file = new File([new ArrayBuffer(8)], "test.wav", { type: "audio/wav" });
+    const event = new CustomEvent("waver:beforeload", { detail: { file }, cancelable: true });
+    act(() => {
+      ref.current?.element()?.dispatchEvent(event);
+    });
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("re-configures the element when only the validateFile prop identity changes", async () => {
+    const validateFileA = () => null;
+    const validateFileB = () => null;
+    const { container, rerender } = render(<Waver validateFile={validateFileA} />);
+    const el = container.querySelector("wave-r") as WaverElement;
+    await act(async () => {});
+    const configureSpy = vi.spyOn(el, "configure");
+
+    rerender(<Waver validateFile={validateFileB} />);
+    await act(async () => {});
+
+    expect(configureSpy).toHaveBeenCalledWith(expect.objectContaining({ validateFile: validateFileB }));
+  });
+
   it("fires onCursorChange when the element emits waver:cursorchange", async () => {
     const onCursorChange = vi.fn();
     const ref = createRef<WaverHandle>();

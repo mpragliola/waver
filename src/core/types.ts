@@ -103,6 +103,13 @@ export interface WaverOptions {
   spectrogramHop: number;
   /** Number of log-scaled frequency rows the spectrogram is bucketed down to for display. */
   spectrogramFreqBins: number;
+  /**
+   * Runs before decoding any file picked via the built-in Load File button or dropped onto the
+   * component. Return a string to reject the file with that message (surfaced via `waver:loaderror`);
+   * return null to accept it. Runs ahead of the built-in `audio/*` MIME filter and the
+   * overwrite-confirmation dialog, so it can also be used to accept non-`audio/*` files.
+   */
+  validateFile?: (file: File) => string | null;
 }
 
 export interface SelectionEventDetail {
@@ -137,6 +144,13 @@ export type WaverEventMap = {
   "waver:recorderror": { error: Error };
   /** Fires when decoding a file picked via the built-in Load File button fails. */
   "waver:loaderror": { error: Error };
+  /**
+   * Fires before decoding any file picked via the built-in Load File button or dropped onto the
+   * component — after `validateFile` (if any) has already accepted the file. Cancelable: call
+   * `preventDefault()` to skip the load with no `waver:loaderror` follow-up. Fires ahead of the
+   * built-in `audio/*` MIME filter and the overwrite-confirmation dialog.
+   */
+  "waver:beforeload": { file: File };
   "waver:viewmodechange": { viewMode: ViewMode };
   /** Fires once the background spectrogram analysis for the current buffer/resolution resolves. */
   "waver:spectrogramready": Record<string, never>;
