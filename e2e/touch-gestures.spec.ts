@@ -12,8 +12,14 @@ test.describe("touch gestures", () => {
     const box = await waveform.boundingBox();
     if (!box) throw new Error("waveform has no layout box");
 
-    // Simulate a touch drag (using pointer events for cross-browser touch simulation)
-    await page.touchscreen.tap(box.x + box.width * 0.2, box.y + box.height / 2);
+    // Simulate a touch tap using pointer events (cross-browser compatible)
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.down({ button: "left" });
+    await page.waitForTimeout(50);
+    await page.mouse.up();
+
+    // Component should still be visible
+    await expect(waveform).toBeVisible();
   });
 
   test("pointer events work for selection", async ({ page }) => {

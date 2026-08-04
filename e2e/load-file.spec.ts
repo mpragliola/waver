@@ -7,6 +7,9 @@ const TONE_WAV = path.join(__dirname, "fixtures", "tone.wav");
 const CORRUPT_WAV = path.join(__dirname, "fixtures", "corrupt.wav");
 
 test.describe("loading a file via the built-in Load button", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+  });
   test("renders a waveform and clears the status line", async ({ page }) => {
     const waver = page.locator("wave-r");
     const fileInput = waver.locator(".waver-file-input");
@@ -29,6 +32,9 @@ test.describe("loading a file via the built-in Load button", () => {
 });
 
 test.describe("loading a file via drag-and-drop", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+  });
   const simulateDragDrop = async (page: any, fileToRead: string) => {
     const fs = await import("fs");
     const buffer = fs.readFileSync(fileToRead);

@@ -108,7 +108,7 @@ test.describe("reset and cancel dialog", () => {
     if (!box) throw new Error("overlay has no layout box");
 
     // Click at the very edge of the overlay
-    await page.click({ x: box.x + 5, y: box.y + 5 });
+    await page.mouse.click(box.x + 5, box.y + 5);
 
     await expect(waver.locator(".waver-confirm-overlay")).not.toBeVisible();
   });
