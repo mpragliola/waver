@@ -789,6 +789,29 @@ describe("WaverElement", () => {
       expect(decodeAudioData).not.toHaveBeenCalled();
     });
 
+    it("preventDefault() on waver:beforeload for a drop with existing audio suppresses the overwrite-confirm dialog entirely", async () => {
+      const el = mount();
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+      el.loadSamples(new Float32Array(1000), 44100);
+      expect(el.hasAudio()).toBe(true);
+
+      el.addEventListener("waver:beforeload", (e) => e.preventDefault());
+      const onError = vi.fn();
+      const onSuccess = vi.fn();
+      el.addEventListener("waver:loaderror", onError);
+      el.addEventListener("waver:loadsuccess", onSuccess);
+
+      dispatchDrop(el, makeFile("second.wav", "audio/wav"));
+
+      await new Promise((r) => setTimeout(r, 0));
+      const confirmOverlay = el.shadowRoot!.querySelector(".waver-confirm-overlay") as HTMLElement;
+      expect(confirmOverlay.style.display).toBe("none");
+      expect(onError).not.toHaveBeenCalled();
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
+
     it("validateFile rejection short-circuits before waver:beforeload is even dispatched", async () => {
       const el = mount();
       vi.stubGlobal("AudioContext", vi.fn(function () {
