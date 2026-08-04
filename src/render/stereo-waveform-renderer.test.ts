@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderStereoWaveform, getStereoLanePeaks } from "./stereo-waveform-renderer";
 import { makeFakeCtx } from "../waver-element.test-helpers";
 

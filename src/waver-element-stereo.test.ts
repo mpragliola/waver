@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineWaverElement, WaverElement } from "./waver-element";
 import {
   installDomStubs,
-  makeAudioBuffer,
   makeFakeAudioContext,
 } from "./waver-element.test-helpers";
 
