@@ -79,7 +79,7 @@ describe("RecorderEngine stereo recording", () => {
   });
 
   describe("stereo recording support", () => {
-    it("captures both L and R channels when channelIndex is null (new stereo mode)", async () => {
+    it('captures both L and R channels when channelIndex is "all"', async () => {
       const chunks: Float32Array[] = [];
       const engine = new RecorderEngine({
         onData: (chunk) => chunks.push(chunk),
@@ -93,8 +93,8 @@ describe("RecorderEngine stereo recording", () => {
       ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
       vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
 
-      // Pass null to indicate "capture all channels"
-      await engine.start(externalStream, null as any);
+      // Pass "all" to indicate "capture all channels"
+      await engine.start(externalStream, "all");
 
       expect(engine.isRecording).toBe(true);
       expect(engine.getInputChannelCount()).toBe(2);
@@ -115,7 +115,7 @@ describe("RecorderEngine stereo recording", () => {
       ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
       vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
 
-      await engine.start(externalStream, null as any);
+      await engine.start(externalStream, "all");
 
       const calls = ctx.createScriptProcessor.mock.calls;
       expect(calls[0]).toEqual([4096, 2, 1]); // 2-in, 1-out
@@ -131,7 +131,7 @@ describe("RecorderEngine stereo recording", () => {
       ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
       vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
 
-      await engine.start(externalStream, null as any);
+      await engine.start(externalStream, "all");
 
       const splitter = ctx.createChannelSplitter.mock.results[0].value as FakeSplitterNode;
       const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
@@ -155,7 +155,7 @@ describe("RecorderEngine stereo recording", () => {
       ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
       vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
 
-      await engine.start(externalStream, null as any);
+      await engine.start(externalStream, "all");
 
       const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
       const leftData = new Float32Array([0.1, 0.2]);
@@ -175,7 +175,7 @@ describe("RecorderEngine stereo recording", () => {
       expect(chunk).toEqual(new Float32Array([0.1, 0.3, 0.2, 0.4]));
     });
 
-    it("is backward compatible: number-based channelIndex still extracts single channel", async () => {
+    it("number-based channelIndex still extracts a single channel", async () => {
       const chunks: Float32Array[] = [];
       const engine = new RecorderEngine({
         onData: (chunk) => chunks.push(chunk),
@@ -203,7 +203,7 @@ describe("RecorderEngine stereo recording", () => {
       expect(chunks[0]).toEqual(inputData);
     });
 
-    it("supports stereo startMonitoring() with null channelIndex", async () => {
+    it('supports stereo startMonitoring() with channelIndex "all"', async () => {
       const levels: number[] = [];
       const engine = new RecorderEngine({
         onLevel: (db) => levels.push(db),
@@ -217,7 +217,7 @@ describe("RecorderEngine stereo recording", () => {
       ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
       vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
 
-      await engine.startMonitoring(externalStream, null as any);
+      await engine.startMonitoring(externalStream, "all");
 
       expect(engine.getInputChannelCount()).toBe(2);
       expect(ctx.createScriptProcessor).toHaveBeenCalledWith(4096, 2, 1);
@@ -237,7 +237,7 @@ describe("RecorderEngine stereo recording", () => {
       ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
       vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
 
-      await engine.startMonitoring(externalStream, null as any);
+      await engine.startMonitoring(externalStream, "all");
 
       const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
       const leftData = new Float32Array([0.3, 0.1]);

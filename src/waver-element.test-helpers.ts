@@ -138,14 +138,17 @@ export function installDomStubs(width = 300, height = 100) {
   };
 }
 
-export function makeAudioBuffer(samples: Float32Array, sampleRate = 44100): AudioBuffer {
+export function makeAudioBuffer(samples: Float32Array | Float32Array[], sampleRate = 44100): AudioBuffer {
+  const channels = Array.isArray(samples) ? samples : [samples];
   return {
     sampleRate,
-    duration: samples.length / sampleRate,
-    numberOfChannels: 1,
-    length: samples.length,
-    getChannelData: () => samples,
-    copyToChannel: vi.fn(),
+    duration: channels[0].length / sampleRate,
+    numberOfChannels: channels.length,
+    length: channels[0].length,
+    getChannelData: (i: number) => channels[i],
+    copyToChannel: vi.fn((source: Float32Array, i: number) => {
+      channels[i] = source;
+    }),
   } as unknown as AudioBuffer;
 }
 
@@ -165,8 +168,9 @@ export function makeFakeAudioContext(sampleRate = 44100) {
       start: vi.fn(),
       stop: vi.fn(),
     })),
-    createBuffer: vi.fn((_channels: number, length: number, sampleRate: number) => {
-      const buf = makeAudioBuffer(new Float32Array(length), sampleRate);
+    createBuffer: vi.fn((channelCount: number, length: number, sampleRate: number) => {
+      const channels = Array.from({ length: channelCount }, () => new Float32Array(length));
+      const buf = makeAudioBuffer(channels, sampleRate);
       created.push({ buffer: buf, sampleRate });
       return buf;
     }),
@@ -179,6 +183,7 @@ export function makeFakeAudioContext(sampleRate = 44100) {
       connect: vi.fn(),
       disconnect: vi.fn(),
     })),
+    createChannelSplitter: vi.fn(() => ({ connect: vi.fn(), disconnect: vi.fn() })),
     createGain: vi.fn(() => ({ gain: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() })),
   };
 }

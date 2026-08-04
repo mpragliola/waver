@@ -406,6 +406,39 @@ describe("WaverElement", () => {
       expect(el.hasAudio()).toBe(false);
     });
 
+    it("clears stale channelSamples from a cancelled stereo recording", async () => {
+      const el = mount();
+      const context = makeFakeAudioContext();
+      context.createMediaStreamSource = vi.fn(() => ({
+        channelCount: 2,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      }));
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return context;
+        })
+      );
+      await el.startRecording(undefined, "all");
+      const processor = context.createScriptProcessor.mock.results.at(-1)!.value;
+      processor.onaudioprocess?.({
+        inputBuffer: {
+          length: 2,
+          getChannelData: (ch: number) => (ch === 0 ? new Float32Array([0.1, 0.2]) : new Float32Array([0.3, 0.4])),
+        },
+      });
+      expect(el.getChannels()).toHaveLength(2);
+
+      el.reset();
+
+      expect(el.getChannels()).toEqual([]);
+      expect(el.getChannelCount()).toBe(1);
+    });
+
     it("never stops tracks on a preset inputStream when cancelling a recording", async () => {
       const el = mount();
       const track = { stop: vi.fn() };
@@ -846,6 +879,12 @@ describe("WaverElement", () => {
       el.configure({ channelIndex: 2 });
       expect(el.getChannelIndex()).toBe(2);
     });
+
+    it("accepts \"all\" to request every channel", () => {
+      const el = mount();
+      el.setChannelIndex("all");
+      expect(el.getChannelIndex()).toBe("all");
+    });
   });
 
   describe("getSamples()/getSampleRate() readback", () => {
@@ -1040,6 +1079,68 @@ describe("WaverElement", () => {
       await el.startRecording();
       el.remove();
       expect(el.isRecording()).toBe(true); // recordingState isn't reset by cancel(), only stopRecording()
+    });
+  });
+
+  describe("recording with channelIndex: \"all\" (stereo)", () => {
+    function stubStereoMic() {
+      const context = makeFakeAudioContext();
+      context.createMediaStreamSource = vi.fn(() => ({
+        channelCount: 2,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      }));
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return context;
+        })
+      );
+      return context;
+    }
+
+    it("de-interleaves captured chunks into per-channel buffers while recording", async () => {
+      const el = mount();
+      const context = stubStereoMic();
+      await el.startRecording(undefined, "all");
+
+      const processor = context.createScriptProcessor.mock.results.at(-1)!.value;
+      // Interleaved L0,R0,L1,R1 as RecorderEngine would emit for a 2-channel source.
+      processor.onaudioprocess?.({
+        inputBuffer: {
+          length: 2,
+          getChannelData: (ch: number) => (ch === 0 ? new Float32Array([0.1, 0.2]) : new Float32Array([0.3, 0.4])),
+        },
+      });
+
+      expect(el.getChannels()).toHaveLength(2);
+      expect(el.getChannels()[0]).toEqual(new Float32Array([0.1, 0.2]));
+      expect(el.getChannels()[1]).toEqual(new Float32Array([0.3, 0.4]));
+      expect(el.getSamples()).toEqual(new Float32Array([0.1, 0.2])); // channel 0 drives the live view
+    });
+
+    it("stopRecording() loads a multi-channel AudioBuffer preserving both channels", async () => {
+      const el = mount();
+      const context = stubStereoMic();
+      await el.startRecording(undefined, "all");
+
+      const processor = context.createScriptProcessor.mock.results.at(-1)!.value;
+      processor.onaudioprocess?.({
+        inputBuffer: {
+          length: 2,
+          getChannelData: (ch: number) => (ch === 0 ? new Float32Array([0.1, 0.2]) : new Float32Array([0.3, 0.4])),
+        },
+      });
+
+      el.stopRecording();
+
+      expect(context.createBuffer).toHaveBeenCalledWith(2, 2, 44100);
+      expect(el.getChannelCount()).toBe(2);
+      expect(el.getChannels()[0]).toEqual(new Float32Array([0.1, 0.2]));
+      expect(el.getChannels()[1]).toEqual(new Float32Array([0.3, 0.4]));
     });
   });
 

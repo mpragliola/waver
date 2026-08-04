@@ -80,11 +80,12 @@ export interface WaverOptions {
   /** State of the built-in "Cancel" (X) button shown top-right once audio is loaded. Confirms before discarding via reset(). */
   cancelButton: ControlState;
   /**
-   * Which channel of a multi-channel recording source to keep, 0-based. Used by
-   * startRecording() (including the built-in Record button) when called with no explicit
-   * channelIndex argument. Falls back to channel 0 if the source has fewer channels.
+   * Which channel(s) of a multi-channel recording source to keep. A number (0-based) selects a
+   * single channel, falling back to channel 0 if the source has fewer channels; `"all"` records
+   * every input channel. Used by startRecording() (including the built-in Record button) when
+   * called with no explicit channelIndex argument.
    */
-  channelIndex: number;
+  channelIndex: number | "all";
   /** When true, the built-in "Load File" / "Record" buttons hide their text label, showing only the icon. */
   hideButtonLabels: boolean;
   /** Main view: waveform or spectrogram. Minimap always stays on waveform regardless of this. */

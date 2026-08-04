@@ -67,7 +67,7 @@ Passed to `configure()` (core) or as props (React/Vue). All fields are optional 
 | `loadButton` | `ControlState` (`"enabled" \| "disabled" \| "hidden"`) | `"enabled"` | State of the built-in "Load File" button shown while no audio is loaded. |
 | `recordButton` | `ControlState` | `"enabled"` | State of the built-in "Record" button shown while no audio is loaded. Set `"disabled"` when several Waver instances share one mic and only one may record at a time. |
 | `cancelButton` | `ControlState` | `"enabled"` | State of the built-in "Cancel" (X) button shown top-right once audio is loaded. Confirms before discarding via `reset()`. |
-| `channelIndex` | `number` | `0` | Which channel of a multi-channel recording source to keep, 0-based. Used by `startRecording()` (including the built-in Record button) when called with no explicit `channelIndex` argument. Falls back to channel 0 if the source has fewer channels. |
+| `channelIndex` | `number \| "all"` | `0` | Which channel(s) of a multi-channel recording source to keep. A number (0-based) selects a single channel, falling back to channel 0 if the source has fewer channels; `"all"` records every input channel (captured as a multi-channel `AudioBuffer`, readable per-channel via `getChannels()`). Used by `startRecording()` (including the built-in Record button) when called with no explicit `channelIndex` argument. |
 | `hideButtonLabels` | `boolean` | `false` | When true, the built-in "Load File" / "Record" buttons hide their text label, showing only the icon (a static `aria-label` is kept regardless). |
 | `viewMode` | `ViewMode` (`"waveform" \| "spectrogram"`) | `"waveform"` | Main view. The minimap always stays on waveform regardless of this. |
 | `recordViewMode` | `RecordViewMode` (`"flat" \| "zoom-out" \| "scroll"`) | `"scroll"` | Viewport behavior while recording only. `"flat"` draws no waveform at all (chrome hidden entirely). `"zoom-out"` always spans 0 → record head, compressing as it grows. `"scroll"` spans 0 → head until the recording outgrows `recordWindowSeconds`, then slides a fixed-width window. The moment `stopRecording()` loads the captured audio, the viewport always resets to a full zoomed-out view regardless of this setting. |
@@ -225,17 +225,22 @@ also restart playback at the new position.
 ### Recording
 
 ```ts
-async startRecording(stream?: MediaStream, channelIndex?: number): Promise<void>
+async startRecording(stream?: MediaStream, channelIndex?: number | "all"): Promise<void>
 ```
 Starts capture. No-op (resolves immediately) if already recording. Input source resolution order:
 1. `stream` argument, if passed.
 2. The stream set via `setInputStream()`, if any.
 3. The default microphone via `getUserMedia`, as a last resort.
 
-Channel resolution: the `channelIndex` argument, or the `channelIndex` option if omitted (falls back
-to channel 0 if the source has fewer channels than requested). The built-in Record button always
-calls `startRecording()` with no arguments, so `setInputStream()` / the `channelIndex` option are
-also how a host app controls what that button records from.
+Channel resolution: the `channelIndex` argument, or the `channelIndex` option if omitted. A number
+(0-based) selects a single channel, falling back to channel 0 if the source has fewer channels;
+`"all"` records every input channel. The built-in Record button always calls `startRecording()` with
+no arguments, so `setInputStream()` / the `channelIndex` option are also how a host app controls
+what that button records from.
+
+While recording, live chunks are de-interleaved per channel as they arrive: `getSamples()` tracks
+channel 0 and `getChannels()` tracks every channel, both updating live (not just after
+`stopRecording()`).
 
 On failure to acquire the stream (e.g. permission denied), emits `waver:recorderror` with the
 thrown `Error` and returns without changing state. On success: clears any existing samples/selection,
@@ -246,10 +251,11 @@ resets cursor to `0`, starts a 500 ms-interval recording-time label updater, set
 stopRecording(): void
 ```
 No-op if not currently recording. Stops capture; if any audio was captured, wraps it in an
-`AudioBuffer` and calls `loadAudioBuffer` with it (same effect as loading via Load File, including
-the reset-to-full-zoom viewport behavior). If nothing was captured, just re-renders the empty state.
-Always emits `waver:recordstop` (with `positionSample` = total captured sample count) after
-handling, regardless of whether any audio was captured.
+`AudioBuffer` (multi-channel when `channelIndex` was `"all"`) and calls `loadAudioBuffer` with it
+(same effect as loading via Load File, including the reset-to-full-zoom viewport behavior). If
+nothing was captured, just re-renders the empty state. Always emits `waver:recordstop` (with
+`positionSample` = total captured sample count) after handling, regardless of whether any audio was
+captured.
 
 ```ts
 isRecording(): boolean
@@ -265,8 +271,8 @@ Sets/gets the stream `startRecording()` uses when called with no explicit `strea
 how a host app lets the user choose a device ahead of time.
 
 ```ts
-setChannelIndex(index: number): void
-getChannelIndex(): number
+setChannelIndex(index: number | "all"): void
+getChannelIndex(): number | "all"
 ```
 Sets/gets the `channelIndex` option (equivalent to `configure({ channelIndex: index })` for the
 setter, but returns immediately for the getter without needing to read full options).

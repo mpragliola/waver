@@ -3,6 +3,10 @@ export interface RecorderEngineEvents {
   onLevel?: (db: number) => void;
 }
 
+/** A channel index (0, 1, ...) picks (not sums) that single channel, to avoid comb-filtering;
+ * out-of-range falls back to channel 0. "all" captures every input channel, interleaved. */
+export type ChannelSelection = number | "all";
+
 /** Converts a linear peak amplitude (0-1) to dBFS. Silence (0) maps to -Infinity rather than NaN. */
 export function peakAmplitudeToDb(peak: number): number {
   return peak > 0 ? 20 * Math.log10(peak) : -Infinity;
@@ -74,12 +78,9 @@ export class RecorderEngine {
    * Waver has no business picking an input device itself. Omit it to fall back to the browser's
    * default mic via getUserMedia.
    *
-   * `channelIndex`: pass a number (0, 1, ...) to record a single channel (backward-compat mode);
-   * pass null/undefined to record all channels in stereo/multichannel mode.
-   * Single-channel mode picks (not sums) to avoid comb-filtering. Falls back to channel 0 if out
-   * of range.
+   * `channelIndex`: see {@link ChannelSelection}.
    */
-  async start(stream?: MediaStream, channelIndex: number | null = 0): Promise<void> {
+  async start(stream?: MediaStream, channelIndex: ChannelSelection = 0): Promise<void> {
     if (this.processor) return; // a capture/monitoring graph is already open
     await this.openGraph(stream, channelIndex, (chunk) => this.events.onData?.(chunk));
     this.recording = true;
@@ -90,14 +91,14 @@ export class RecorderEngine {
    * accumulating any samples. Shares the same node graph as `start()`; the caller is responsible
    * for treating this as a distinct (non-"recording") state, since `isRecording` stays false.
    */
-  async startMonitoring(stream?: MediaStream, channelIndex: number | null = 0): Promise<void> {
+  async startMonitoring(stream?: MediaStream, channelIndex: ChannelSelection = 0): Promise<void> {
     if (this.processor) return; // a capture/monitoring graph is already open
     await this.openGraph(stream, channelIndex, undefined, (db) => this.events.onLevel?.(db));
   }
 
   private async openGraph(
     stream: MediaStream | undefined,
-    channelIndex: number | null,
+    channelIndex: ChannelSelection,
     onChunk: ((chunk: Float32Array) => void) | undefined,
     onLevel?: (db: number) => void
   ): Promise<void> {
@@ -106,7 +107,7 @@ export class RecorderEngine {
     const sourceNode = context.createMediaStreamSource(mediaStream);
 
     this.inputChannelCount = sourceNode.channelCount;
-    const stereoMode = channelIndex === null || channelIndex === undefined;
+    const stereoMode = channelIndex === "all";
     const recordChannels = stereoMode ? this.inputChannelCount : 1;
     this.recordingChannelCount = recordChannels;
 

@@ -119,7 +119,9 @@ export class WaverElement extends HTMLElement {
    * without having to intercept every place recording can be triggered. */
   private presetInputStream: MediaStream | null = null;
   private recordingState: "idle" | "monitoring" | "recording" = "idle";
-  private recordingBuffer = new GrowableFloat32Buffer();
+  /** One buffer per recorded channel, de-interleaved as chunks arrive. Always has at least one
+   * buffer once recording starts, even in single-channel mode. */
+  private recordingBuffers: GrowableFloat32Buffer[] = [];
   private recordingStartedAt = 0;
   private recordingTimerHandle: number | null = null;
   /** Bound instance method (not an inline closure) so it can be removed again in disconnectedCallback()
@@ -396,11 +398,12 @@ export class WaverElement extends HTMLElement {
       this.raf = null;
     }
     this.zoomAnimActive = false;
-    this.recordingBuffer.reset();
+    this.recordingBuffers = [];
     this.audioEngine?.dispose();
     this.audioEngine = null;
     this.spectrogramCache.dispose();
     this.samples = new Float32Array(0);
+    this.channelSamples = [];
     this.sampleRate = 44100;
     this.selection = null;
     this.cursorSample = 0;
@@ -459,11 +462,11 @@ export class WaverElement extends HTMLElement {
     return this.presetInputStream;
   }
 
-  setChannelIndex(index: number): void {
+  setChannelIndex(index: number | "all"): void {
     this.opts.channelIndex = index;
   }
 
-  getChannelIndex(): number {
+  getChannelIndex(): number | "all" {
     return this.opts.channelIndex;
   }
 
@@ -497,7 +500,7 @@ export class WaverElement extends HTMLElement {
    * specific device, or omit to use the stream set via setInputStream(), falling back to the
    * default mic via getUserMedia.
    */
-  async startMonitoring(stream?: MediaStream, channelIndex?: number): Promise<void> {
+  async startMonitoring(stream?: MediaStream, channelIndex?: number | "all"): Promise<void> {
     if (this.recordingState !== "idle") return;
 
     const engine = new RecorderEngine({ onLevel: (db) => this.updateVuMeter(db) });
@@ -546,7 +549,7 @@ export class WaverElement extends HTMLElement {
    * Record button always calls startRecording() with no argument, so setInputStream() is also how
    * a host app controls what that button records from.
    */
-  async startRecording(stream?: MediaStream, channelIndex?: number): Promise<void> {
+  async startRecording(stream?: MediaStream, channelIndex?: number | "all"): Promise<void> {
     if (this.recordingState === "recording") return;
 
     let handoffStream = stream;
@@ -568,8 +571,12 @@ export class WaverElement extends HTMLElement {
     }
 
     this.recorderEngine = engine;
-    this.recordingBuffer.reset();
+    this.recordingBuffers = Array.from(
+      { length: engine.getRecordingChannelCount() },
+      () => new GrowableFloat32Buffer()
+    );
     this.samples = new Float32Array(0);
+    this.channelSamples = [];
     this.sampleRate = engine.getSampleRate();
     this.selection = null;
     this.cursorSample = 0;
@@ -593,10 +600,11 @@ export class WaverElement extends HTMLElement {
     this.recordingState = "idle";
     this.stopRecordingTimerDisplay();
 
-    const captured = this.recordingBuffer.view();
-    if (context && captured.length > 0) {
-      const buffer = context.createBuffer(1, captured.length, sampleRate);
-      buffer.copyToChannel(new Float32Array(captured), 0);
+    const captured = this.recordingBuffers.map((b) => b.view());
+    const frameCount = captured[0]?.length ?? 0;
+    if (context && frameCount > 0) {
+      const buffer = context.createBuffer(captured.length, frameCount, sampleRate);
+      captured.forEach((channel, i) => buffer.copyToChannel(new Float32Array(channel), i));
       // loadAudioBuffer -> loadSamples always resets to fullZoom(), independent of recordViewMode:
       // the record-mode viewport is intentionally a capture-only affordance, not carried into playback.
       this.loadAudioBuffer(buffer, context);
@@ -609,8 +617,22 @@ export class WaverElement extends HTMLElement {
   }
 
   private appendRecordedChunk(chunk: Float32Array): void {
-    this.recordingBuffer.push(chunk);
-    this.samples = this.recordingBuffer.view();
+    const channelCount = this.recordingBuffers.length;
+    if (channelCount > 1) {
+      const frameCount = chunk.length / channelCount;
+      for (let ch = 0; ch < channelCount; ch++) {
+        const deinterleaved = new Float32Array(frameCount);
+        for (let i = 0; i < frameCount; i++) {
+          deinterleaved[i] = chunk[i * channelCount + ch];
+        }
+        this.recordingBuffers[ch].push(deinterleaved);
+      }
+      this.channelSamples = this.recordingBuffers.map((b) => b.view());
+      this.samples = this.channelSamples[0];
+    } else {
+      this.recordingBuffers[0].push(chunk);
+      this.samples = this.recordingBuffers[0].view();
+    }
     this.zoom = recordZoom(
       this.opts.recordViewMode,
       this.viewportConfig(),
