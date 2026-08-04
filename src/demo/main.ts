@@ -10,6 +10,7 @@ const zoomFullButton = document.getElementById("zoomFull") as HTMLButtonElement;
 const viewModeButton = document.getElementById("viewMode") as HTMLButtonElement;
 const resetButton = document.getElementById("reset") as HTMLButtonElement;
 const toggleButtonLabelsButton = document.getElementById("toggleButtonLabels") as HTMLButtonElement;
+const monitorButton = document.getElementById("monitor") as HTMLButtonElement;
 const recordViewModeSelect = document.getElementById("recordViewMode") as HTMLSelectElement;
 const inputDeviceSelect = document.getElementById("inputDevice") as HTMLSelectElement;
 
@@ -92,6 +93,14 @@ toggleButtonLabelsButton.addEventListener("click", () => {
   waver.configure({ hideButtonLabels: buttonLabelsHidden });
 });
 
+monitorButton.addEventListener("click", () => {
+  if (waver.isMonitoring()) {
+    waver.stopMonitoring();
+  } else {
+    void waver.startMonitoring();
+  }
+});
+
 waver.addEventListener("waver:cursorchange", (e) => {
   const detail = (e as CustomEvent).detail;
   console.log("cursor", detail.positionSample);
@@ -99,6 +108,8 @@ waver.addEventListener("waver:cursorchange", (e) => {
 
 waver.addEventListener("waver:recordstart", () => setStatus("Recording…"));
 waver.addEventListener("waver:recordstop", () => setStatus(""));
+waver.addEventListener("waver:monitorstart", () => setStatus("Monitoring…"));
+waver.addEventListener("waver:monitorstop", () => setStatus(""));
 waver.addEventListener("waver:reset", () => setStatus(""));
 waver.addEventListener("waver:recorderror", (e) => {
   const detail = (e as CustomEvent).detail;

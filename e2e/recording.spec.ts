@@ -43,6 +43,37 @@ test("interaction is locked on the waveform while recording", async ({ page }) =
   await waver.locator(".waver-action-btn--stop").click();
 });
 
+test("Monitor button opens the mic and shows the VU meter without recording", async ({ page }) => {
+  await page.goto("/");
+  const waver = page.locator("wave-r");
+
+  await page.click("#monitor");
+
+  await expect(waver.locator(".waver-vu-meter")).toBeVisible();
+  await expect(waver.locator(".waver-recording-bar")).toBeHidden();
+  await expect(page.locator("#status")).toContainText("Monitoring");
+
+  await page.click("#monitor");
+
+  await expect(waver.locator(".waver-vu-meter")).toBeHidden();
+  await expect(page.locator("#status")).toHaveText("");
+});
+
+test("clicking Record while monitoring transitions straight to recording", async ({ page }) => {
+  await page.goto("/");
+  const waver = page.locator("wave-r");
+
+  await page.click("#monitor");
+  await expect(waver.locator(".waver-vu-meter")).toBeVisible();
+
+  await waver.locator(".waver-empty-overlay .waver-action-btn--record").click();
+
+  await expect(waver.locator(".waver-vu-meter")).toBeHidden();
+  await expect(waver.locator(".waver-recording-bar")).toBeVisible();
+
+  await waver.locator(".waver-action-btn--stop").click();
+});
+
 test("recordButton: 'disabled' via configure() prevents starting a recording from the UI", async ({ page }) => {
   await page.goto("/");
   const waver = page.locator("wave-r");
