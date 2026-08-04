@@ -35,7 +35,12 @@ export async function getCapturedEvents<T = unknown>(page: Page, type: string): 
 export async function loadTone(page: Page): Promise<void> {
   const waver = page.locator("wave-r");
   await waver.locator(".waver-file-input").setInputFiles(TONE_WAV);
-  await expect(page.locator("#status")).toHaveText("");
+  // #status has no waver:loadsuccess handler clearing it, so it's not a reliable decode-complete
+  // signal (it's often already "" before decode finishes). Poll the element's own sample buffer,
+  // which loadAudioBuffer() populates synchronously once decodeAudioData() resolves.
+  await expect
+    .poll(() => page.evaluate(() => (document.getElementById("waver") as any).getSamples().length))
+    .toBeGreaterThan(0);
 }
 
 export async function configureWaver(page: Page, options: Record<string, any>): Promise<void> {

@@ -1,16 +1,5 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import { captureWaverEvents, getCapturedEvents } from "./helpers";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TONE_WAV = path.join(__dirname, "fixtures", "tone.wav");
-
-async function loadTone(page: import("@playwright/test").Page) {
-  const waver = page.locator("wave-r");
-  await waver.locator(".waver-file-input").setInputFiles(TONE_WAV);
-  await expect(page.locator("#status")).toHaveText("");
-}
+import { captureWaverEvents, getCapturedEvents, loadTone } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
