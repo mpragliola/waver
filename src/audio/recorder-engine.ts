@@ -9,9 +9,12 @@ export function peakAmplitudeToDb(peak: number): number {
 }
 
 /**
- * Captures mono microphone audio via getUserMedia + ScriptProcessorNode, streaming raw Float32
+ * Captures audio via getUserMedia + ScriptProcessorNode, streaming raw Float32
  * chunks to the caller as they arrive. The caller owns accumulation/buffering; this class only
  * owns the mic stream and its AudioContext.
+ *
+ * Supports both mono (single channel selection via channelIndex number) and stereo (all channels
+ * via channelIndex null/undefined) recording.
  *
  * Uses ScriptProcessorNode (deprecated but universally supported, no separate worklet module to
  * bundle/fetch) rather than AudioWorklet, since this runs synchronously on the main thread with
@@ -29,6 +32,7 @@ export class RecorderEngine {
   private silentGain: GainNode | null = null;
   private recording = false;
   private inputChannelCount = 1;
+  private recordingChannelCount = 1;
   private events: RecorderEngineEvents;
 
   constructor(events: RecorderEngineEvents = {}) {
@@ -48,6 +52,11 @@ export class RecorderEngine {
     return this.inputChannelCount;
   }
 
+  /** Channels being recorded/monitored (1 in mono mode, N in stereo mode). */
+  getRecordingChannelCount(): number {
+    return this.recordingChannelCount;
+  }
+
   /** Valid after start()/startMonitoring(); remains open after stop() so the caller can reuse it for playback. */
   getContext(): AudioContext | null {
     return this.context;
@@ -65,11 +74,12 @@ export class RecorderEngine {
    * Waver has no business picking an input device itself. Omit it to fall back to the browser's
    * default mic via getUserMedia.
    *
-   * `channelIndex` picks which channel of a multi-channel source to keep (0-based) — picked, not
-   * summed, since summing a mic on one input with a silent other input costs 6 dB and can comb the
-   * signal. Falls back to channel 0 if the source has fewer channels than requested.
+   * `channelIndex`: pass a number (0, 1, ...) to record a single channel (backward-compat mode);
+   * pass null/undefined to record all channels in stereo/multichannel mode.
+   * Single-channel mode picks (not sums) to avoid comb-filtering. Falls back to channel 0 if out
+   * of range.
    */
-  async start(stream?: MediaStream, channelIndex = 0): Promise<void> {
+  async start(stream?: MediaStream, channelIndex: number | null = 0): Promise<void> {
     if (this.processor) return; // a capture/monitoring graph is already open
     await this.openGraph(stream, channelIndex, (chunk) => this.events.onData?.(chunk));
     this.recording = true;
@@ -80,50 +90,91 @@ export class RecorderEngine {
    * accumulating any samples. Shares the same node graph as `start()`; the caller is responsible
    * for treating this as a distinct (non-"recording") state, since `isRecording` stays false.
    */
-  async startMonitoring(stream?: MediaStream, channelIndex = 0): Promise<void> {
+  async startMonitoring(stream?: MediaStream, channelIndex: number | null = 0): Promise<void> {
     if (this.processor) return; // a capture/monitoring graph is already open
     await this.openGraph(stream, channelIndex, undefined, (db) => this.events.onLevel?.(db));
   }
 
   private async openGraph(
     stream: MediaStream | undefined,
-    channelIndex: number,
+    channelIndex: number | null,
     onChunk: ((chunk: Float32Array) => void) | undefined,
     onLevel?: (db: number) => void
   ): Promise<void> {
     const mediaStream = stream ?? (await navigator.mediaDevices.getUserMedia({ audio: true }));
     const context = new AudioContext();
     const sourceNode = context.createMediaStreamSource(mediaStream);
-    const processor = context.createScriptProcessor(4096, 1, 1);
+
+    this.inputChannelCount = sourceNode.channelCount;
+    const stereoMode = channelIndex === null || channelIndex === undefined;
+    const recordChannels = stereoMode ? this.inputChannelCount : 1;
+    this.recordingChannelCount = recordChannels;
+
+    const processor = context.createScriptProcessor(4096, recordChannels, 1);
     const silentGain = context.createGain();
     silentGain.gain.value = 0;
 
-    this.inputChannelCount = sourceNode.channelCount;
-    const activeChannel = channelIndex > 0 && channelIndex < this.inputChannelCount ? channelIndex : 0;
-
     let splitterNode: ChannelSplitterNode | null = null;
-    if (activeChannel > 0) {
+    if (stereoMode && this.inputChannelCount > 1) {
+      // Stereo mode: split all channels and connect each to processor
       splitterNode = context.createChannelSplitter(this.inputChannelCount);
       sourceNode.connect(splitterNode);
-      splitterNode.connect(processor, activeChannel);
+      for (let i = 0; i < this.inputChannelCount; i++) {
+        splitterNode.connect(processor, i);
+      }
+    } else if (!stereoMode) {
+      // Single-channel mode: use channel selection
+      const activeChannel =
+        typeof channelIndex === "number" && channelIndex > 0 && channelIndex < this.inputChannelCount
+          ? channelIndex
+          : 0;
+      if (activeChannel > 0) {
+        splitterNode = context.createChannelSplitter(this.inputChannelCount);
+        sourceNode.connect(splitterNode);
+        splitterNode.connect(processor, activeChannel);
+      } else {
+        sourceNode.connect(processor);
+      }
     } else {
       sourceNode.connect(processor);
     }
 
     processor.onaudioprocess = (e) => {
-      const input = e.inputBuffer.getChannelData(0);
-      if (onChunk) {
-        const chunk = new Float32Array(input.length);
-        chunk.set(input);
-        onChunk(chunk);
-      }
-      if (onLevel) {
-        let peak = 0;
-        for (let i = 0; i < input.length; i++) {
-          const abs = Math.abs(input[i]);
-          if (abs > peak) peak = abs;
+      if (stereoMode && this.inputChannelCount > 1) {
+        // Interleave stereo data: L0, R0, L1, R1, ...
+        const interleaved = new Float32Array(e.inputBuffer.length * this.inputChannelCount);
+        for (let i = 0; i < e.inputBuffer.length; i++) {
+          for (let ch = 0; ch < this.inputChannelCount; ch++) {
+            interleaved[i * this.inputChannelCount + ch] = e.inputBuffer.getChannelData(ch)[i];
+          }
         }
-        onLevel(peakAmplitudeToDb(peak));
+        if (onChunk) {
+          onChunk(interleaved);
+        }
+        if (onLevel) {
+          let peak = 0;
+          for (let i = 0; i < interleaved.length; i++) {
+            const abs = Math.abs(interleaved[i]);
+            if (abs > peak) peak = abs;
+          }
+          onLevel(peakAmplitudeToDb(peak));
+        }
+      } else {
+        // Single-channel mode (backward compat)
+        const input = e.inputBuffer.getChannelData(0);
+        if (onChunk) {
+          const chunk = new Float32Array(input.length);
+          chunk.set(input);
+          onChunk(chunk);
+        }
+        if (onLevel) {
+          let peak = 0;
+          for (let i = 0; i < input.length; i++) {
+            const abs = Math.abs(input[i]);
+            if (abs > peak) peak = abs;
+          }
+          onLevel(peakAmplitudeToDb(peak));
+        }
       }
     };
 
