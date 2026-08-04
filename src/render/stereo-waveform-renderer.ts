@@ -42,8 +42,8 @@ export function renderStereoWaveform(
   peaksByChannel: PeakPair[][],
   canvasWidth: number,
   laneHeights: number[],
-  offsetSample: number,
-  samplesPerPixel: number,
+  _offsetSample: number,
+  _samplesPerPixel: number,
   theme: WaverTheme
 ): void {
   ctx.fillStyle = theme.backgroundColor;
@@ -60,13 +60,12 @@ export function renderStereoWaveform(
 
     ctx.beginPath();
     for (let pixelIndex = 0; pixelIndex < peaks.length; pixelIndex++) {
-      const { min, max } = peaks[pixelIndex];
+      const { max } = peaks[pixelIndex];
       const x = pixelIndex;
 
       // Map waveform amplitude to canvas height (center at midpoint)
       const maxPixels = laneHeight / 2;
       const topY = centerY - max * maxPixels;
-      const bottomY = centerY - min * maxPixels;
 
       if (pixelIndex === 0) {
         ctx.moveTo(x, topY);
@@ -79,7 +78,7 @@ export function renderStereoWaveform(
     // Draw the bottom half (mirror)
     ctx.beginPath();
     for (let pixelIndex = 0; pixelIndex < peaks.length; pixelIndex++) {
-      const { min, max } = peaks[pixelIndex];
+      const { min } = peaks[pixelIndex];
       const x = pixelIndex;
       const maxPixels = laneHeight / 2;
       const bottomY = centerY - min * maxPixels;
