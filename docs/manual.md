@@ -22,9 +22,9 @@ picker) and a status line above it for error/recording messages.
 
 Two ways to get audio into a Waver instance: the built-in **Load File** button (opens a native
 file picker wired to `<input type="file">`), or programmatically via `loadAudioBuffer()` /
-`loadSamples()`. Until audio is loaded, the component shows an empty-state overlay with Load File
-and Record buttons — each independently configurable via the `loadButton`/`recordButton` options
-(`"enabled" | "disabled" | "hidden"`).
+`loadSamples()`. Until audio is loaded, the component shows an empty-state overlay with Load File,
+Monitor, and Record buttons — each independently configurable via the `loadButton`/`monitorButton`/
+`recordButton` options (`"enabled" | "disabled" | "hidden"`).
 
 ![Empty state with labeled buttons](./screenshots/empty-state/02-buttons-with-labels.png)
 
@@ -133,12 +133,24 @@ if already playing, seeks playback there. Labels use `rulerTimeFormat`: `"time"`
 
 ---
 
+## Monitoring
+
+The **Monitor** button opens the microphone for live level metering without recording, displaying a
+VU meter on the left edge of the component. Click it again (or press Escape) to close the meter and
+disconnect the mic. Monitoring fires `waver:monitorstart` / `waver:monitorstop` events; use the
+`startMonitoring()` / `stopMonitoring()` / `isMonitoring()` methods for programmatic control.
+When the Record button is clicked while monitoring, monitoring automatically stops and recording
+begins.
+
+---
+
 ## Recording
 
 Clicking the built-in **Record** button (or calling `startRecording()`) prompts for mic access and
 starts capturing; the empty-state overlay is replaced by a centered readout — pulsing dot, elapsed
 time, and a **Stop** button. Clicking Stop (or `stopRecording()`) ends capture and loads the
-recorded audio in place, same as picking a file.
+recorded audio in place, same as picking a file. Recording fires `waver:recordstart` / `waver:recordstop` /
+`waver:recordsuccess` events.
 
 ![Live recording overlay, scroll record mode](./screenshots/recording/01-recording-overlay-scroll.png)
 
@@ -158,8 +170,9 @@ zoom/pan/seek is locked during recording since auto-follow would immediately ove
 
 Set `recordButton: "disabled"` to grey out (but keep visible) the Record button on other instances
 while one is actively recording — useful when several Waver instances share a single mic and only
-one may record at a time. Multi-channel sources use `channelIndex` (config option or
-`startRecording()`'s second argument) to pick which channel is kept.
+one may record at a time. Stereo/multichannel sources use `channelIndex` (config option or
+`startRecording()`'s second argument) to pick which channel is kept; the loaded audio retains all
+channels and is accessible via `getChannelCount()` / `getChannelData(index)`.
 
 ---
 
@@ -168,6 +181,7 @@ one may record at a time. Multi-channel sources use `channelIndex` (config optio
 | Button | Shown when | Options |
 |---|---|---|
 | Load File | No audio loaded | `loadButton`: `"enabled" \| "disabled" \| "hidden"` |
+| Monitor | No audio loaded | `monitorButton`: `"enabled" \| "disabled" \| "hidden"` |
 | Record | No audio loaded | `recordButton`: `"enabled" \| "disabled" \| "hidden"` |
 | Cancel (×) | Audio loaded | `cancelButton`: `"enabled" \| "disabled" \| "hidden"` |
 | Stop | While recording | (no dedicated option — tied to recording state) |
