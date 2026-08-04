@@ -110,6 +110,7 @@ export class WaverElement extends HTMLElement {
   private vuMeterEl: HTMLDivElement;
   private vuMeterFillEl: HTMLDivElement;
   private fileInput: HTMLInputElement;
+  private pendingDropFile: File | null = null;
   private internalAudioContext: AudioContext | null = null;
   private recorderEngine: RecorderEngine | null = null;
   private monitorEngine: RecorderEngine | null = null;
@@ -295,15 +296,26 @@ export class WaverElement extends HTMLElement {
       if (this.opts.cancelButton !== "enabled") return;
       this.openCancelConfirm();
     });
-    this.confirmKeepBtn.addEventListener("click", () => this.closeCancelConfirm());
+    this.confirmKeepBtn.addEventListener("click", () => {
+      this.pendingDropFile = null;
+      this.closeCancelConfirm();
+    });
     this.confirmClearBtn.addEventListener("click", () => {
       this.closeCancelConfirm();
-      this.reset();
+      if (this.pendingDropFile) {
+        const file = this.pendingDropFile;
+        this.pendingDropFile = null;
+        void this.loadFile(file);
+      } else {
+        this.reset();
+      }
     });
     this.confirmOverlayEl.addEventListener("click", (e) => {
       if (e.target === this.confirmOverlayEl) this.closeCancelConfirm();
     });
     this.fileInput.addEventListener("change", () => void this.handleFileInputChange());
+
+    this.attachDragDropListeners();
 
     this.pointerController = new PointerController({
       getZoom: () => this.zoom,
@@ -782,6 +794,46 @@ export class WaverElement extends HTMLElement {
     this.opts = { ...this.opts, viewMode: mode };
     this.emit("waver:viewmodechange", { viewMode: mode });
     this.render();
+  }
+
+  private attachDragDropListeners(): void {
+    this.container.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = "copy";
+    });
+    this.container.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      const file = files[0];
+      if (!file.type.startsWith("audio/")) return;
+      void this.handleDrop(file);
+    });
+  }
+
+  private async handleDrop(file: File): Promise<void> {
+    if (this.hasAudio() && this.recordingState !== "recording") {
+      this.pendingDropFile = file;
+      this.openCancelConfirm();
+      return;
+    }
+    await this.loadFile(file);
+  }
+
+  private async loadFile(file: File): Promise<void> {
+    try {
+      const context = this.ensureInternalAudioContext();
+      const arrayBuffer = await file.arrayBuffer();
+      const audioBuffer = await context.decodeAudioData(arrayBuffer);
+      this.loadAudioBuffer(audioBuffer, context);
+      this.emit("waver:loadsuccess", {
+        durationSample: this.samples.length,
+        sampleRate: this.sampleRate,
+        fileName: file.name,
+      });
+    } catch (err) {
+      this.emit("waver:loaderror", { error: err as Error });
+    }
   }
 
   // ---- Internals ----------------------------------------------------------

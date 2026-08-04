@@ -29,3 +29,94 @@ test.describe("loading a file via the built-in Load button", () => {
     await expect(page.locator("#status")).toContainText("Failed to decode audio");
   });
 });
+
+test.describe("loading a file via drag-and-drop", () => {
+  const simulateDragDrop = async (page: any, fileToRead: string) => {
+    const fs = await import("fs");
+    const buffer = fs.readFileSync(fileToRead);
+    const dataTransfer = await page.evaluateHandle(({ buffer }) => {
+      const dt = new DataTransfer();
+      const file = new File([new Uint8Array(buffer)], "test.wav", { type: "audio/wav" });
+      dt.items.add(file);
+      return dt;
+    }, { buffer: Array.from(buffer) });
+
+    const container = page.locator(".waver-container");
+    await container.dispatchEvent("drop", { dataTransfer });
+  };
+
+  test("loads audio when dropping a single file on the empty component", async ({ page }) => {
+    await page.goto("/");
+    const waver = page.locator("wave-r");
+
+    // Simulate drag-and-drop of audio file
+    await simulateDragDrop(page, TONE_WAV);
+
+    // The Load/Record overlay buttons and the empty state disappear once samples decode.
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
+    await expect(page.locator("#status")).toHaveText("");
+  });
+
+  test("shows confirmation dialog when dropping a file over existing audio", async ({ page }) => {
+    await page.goto("/");
+    const waver = page.locator("wave-r");
+
+    // Load initial audio
+    await simulateDragDrop(page, TONE_WAV);
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
+
+    // Drop another file — should show confirmation
+    await simulateDragDrop(page, TONE_WAV);
+    await expect(waver.locator(".waver-confirm-overlay")).toBeVisible();
+  });
+
+  test("clears and loads new file when clicking 'Clear' in confirmation", async ({ page }) => {
+    await page.goto("/");
+    const waver = page.locator("wave-r");
+
+    // Load initial audio
+    await simulateDragDrop(page, TONE_WAV);
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
+
+    // Drop another file
+    await simulateDragDrop(page, TONE_WAV);
+    await expect(waver.locator(".waver-confirm-overlay")).toBeVisible();
+
+    // Click Clear button
+    const clearBtn = waver.locator(".waver-confirm-clear");
+    await clearBtn.click();
+
+    // Confirmation should close and waveform should remain loaded
+    await expect(waver.locator(".waver-confirm-overlay")).not.toBeVisible();
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
+  });
+
+  test("keeps existing audio when clicking 'Keep' in confirmation", async ({ page }) => {
+    await page.goto("/");
+    const waver = page.locator("wave-r");
+
+    // Load initial audio
+    await simulateDragDrop(page, TONE_WAV);
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
+
+    // Drop another file
+    await simulateDragDrop(page, TONE_WAV);
+    await expect(waver.locator(".waver-confirm-overlay")).toBeVisible();
+
+    // Click Keep button
+    const keepBtn = waver.locator(".waver-confirm-keep");
+    await keepBtn.click();
+
+    // Confirmation should close and waveform should remain loaded
+    await expect(waver.locator(".waver-confirm-overlay")).not.toBeVisible();
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
+  });
+
+  test("shows decode error for invalid file dropped", async ({ page }) => {
+    await page.goto("/");
+
+    await simulateDragDrop(page, CORRUPT_WAV);
+
+    await expect(page.locator("#status")).toContainText("Failed to decode audio");
+  });
+});
