@@ -1,5 +1,11 @@
 export interface RecorderEngineEvents {
   onData?: (chunk: Float32Array) => void;
+  onLevel?: (db: number) => void;
+}
+
+/** Converts a linear peak amplitude (0-1) to dBFS. Silence (0) maps to -Infinity rather than NaN. */
+export function peakAmplitudeToDb(peak: number): number {
+  return peak > 0 ? 20 * Math.log10(peak) : -Infinity;
 }
 
 /**
@@ -37,14 +43,20 @@ export class RecorderEngine {
     return this.context?.sampleRate ?? 44100;
   }
 
-  /** Channels the opened source actually has. Valid after start(); 1 before. */
+  /** Channels the opened source actually has. Valid after start()/startMonitoring(); 1 before. */
   getInputChannelCount(): number {
     return this.inputChannelCount;
   }
 
-  /** Valid after start(); remains open after stop() so the caller can reuse it for playback. */
+  /** Valid after start()/startMonitoring(); remains open after stop() so the caller can reuse it for playback. */
   getContext(): AudioContext | null {
     return this.context;
+  }
+
+  /** The currently-open MediaStream, or null if no graph is open. Lets a caller hand this stream
+   * to a second RecorderEngine (e.g. monitoring -> recording handoff) without reopening the mic. */
+  getStream(): MediaStream | null {
+    return this.stream;
   }
 
   /**
@@ -59,7 +71,26 @@ export class RecorderEngine {
    */
   async start(stream?: MediaStream, channelIndex = 0): Promise<void> {
     if (this.recording) return;
+    await this.openGraph(stream, channelIndex, (chunk) => this.events.onData?.(chunk));
+    this.recording = true;
+  }
 
+  /**
+   * Opens the mic and reports live peak levels via `onLevel`, without invoking `onData` or
+   * accumulating any samples. Shares the same node graph as `start()`; the caller is responsible
+   * for treating this as a distinct (non-"recording") state, since `isRecording` stays false.
+   */
+  async startMonitoring(stream?: MediaStream, channelIndex = 0): Promise<void> {
+    if (this.context) return; // already open (monitoring or recording)
+    await this.openGraph(stream, channelIndex, undefined, (db) => this.events.onLevel?.(db));
+  }
+
+  private async openGraph(
+    stream: MediaStream | undefined,
+    channelIndex: number,
+    onChunk: ((chunk: Float32Array) => void) | undefined,
+    onLevel?: (db: number) => void
+  ): Promise<void> {
     const mediaStream = stream ?? (await navigator.mediaDevices.getUserMedia({ audio: true }));
     const context = new AudioContext();
     const sourceNode = context.createMediaStreamSource(mediaStream);
@@ -81,9 +112,19 @@ export class RecorderEngine {
 
     processor.onaudioprocess = (e) => {
       const input = e.inputBuffer.getChannelData(0);
-      const chunk = new Float32Array(input.length);
-      chunk.set(input);
-      this.events.onData?.(chunk);
+      if (onChunk) {
+        const chunk = new Float32Array(input.length);
+        chunk.set(input);
+        onChunk(chunk);
+      }
+      if (onLevel) {
+        let peak = 0;
+        for (let i = 0; i < input.length; i++) {
+          const abs = Math.abs(input[i]);
+          if (abs > peak) peak = abs;
+        }
+        onLevel(peakAmplitudeToDb(peak));
+      }
     };
 
     // ScriptProcessorNode only fires onaudioprocess while connected through to a destination;
@@ -98,17 +139,16 @@ export class RecorderEngine {
     this.splitterNode = splitterNode;
     this.processor = processor;
     this.silentGain = silentGain;
-    this.recording = true;
   }
 
-  /** Stops capture and releases the mic, but leaves the AudioContext open for reuse (e.g. playback). */
+  /** Stops capture/monitoring and releases the mic, but leaves the AudioContext open for reuse (e.g. playback). */
   stop(): void {
-    if (!this.recording) return;
+    if (!this.context) return;
     this.recording = false;
     this.releaseCaptureNodes();
   }
 
-  /** Stops capture and fully tears down, including closing the AudioContext. */
+  /** Stops capture/monitoring and fully tears down, including closing the AudioContext. */
   cancel(): void {
     if (!this.context) return;
     this.recording = false;

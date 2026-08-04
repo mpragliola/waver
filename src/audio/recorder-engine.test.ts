@@ -1,5 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { RecorderEngine } from "./recorder-engine";
+import { peakAmplitudeToDb, RecorderEngine } from "./recorder-engine";
+
+describe("peakAmplitudeToDb", () => {
+  it("returns 0 for a full-scale peak", () => {
+    expect(peakAmplitudeToDb(1)).toBeCloseTo(0, 5);
+  });
+
+  it("returns -Infinity for silence", () => {
+    expect(peakAmplitudeToDb(0)).toBe(-Infinity);
+  });
+
+  it("returns -6.02dB for a half-scale peak", () => {
+    expect(peakAmplitudeToDb(0.5)).toBeCloseTo(-6.02, 1);
+  });
+});
 
 class FakeAudioParam {
   value = 0;
@@ -274,6 +288,81 @@ describe("RecorderEngine", () => {
     it("getInputChannelCount() reports 1 before start()", () => {
       const engine = new RecorderEngine();
       expect(engine.getInputChannelCount()).toBe(1);
+    });
+  });
+
+  describe("startMonitoring()", () => {
+    it("opens a mic graph and fires onLevel instead of onData", async () => {
+      const onData = vi.fn();
+      const onLevel = vi.fn();
+      const engine = new RecorderEngine({ onData, onLevel });
+
+      await engine.startMonitoring();
+
+      expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+      expect(engine.isRecording).toBe(false); // monitoring is not "recording"
+
+      const ctx = contexts[0];
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+      const inputData = new Float32Array([0.1, -0.5, 0.3]);
+      processor.onaudioprocess?.({ inputBuffer: { getChannelData: () => inputData } });
+
+      expect(onData).not.toHaveBeenCalled();
+      expect(onLevel).toHaveBeenCalledTimes(1);
+      const db = onLevel.mock.calls[0][0] as number;
+      expect(db).toBeCloseTo(20 * Math.log10(0.5), 5); // peak of the chunk is |-0.5|
+    });
+
+    it("wires the same silent-gain routing as start()", async () => {
+      const engine = new RecorderEngine();
+      await engine.startMonitoring();
+
+      const ctx = contexts[0];
+      const source = ctx.createMediaStreamSource.mock.results[0].value as FakeSourceNode;
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+      const gain = ctx.createGain.mock.results[0].value as FakeGain;
+
+      expect(gain.gain.value).toBe(0);
+      expect(source.connect).toHaveBeenCalledWith(processor);
+      expect(processor.connect).toHaveBeenCalledWith(gain);
+      expect(gain.connect).toHaveBeenCalledWith(ctx.destination);
+    });
+
+    it("stop() tears down monitoring nodes and stops owned mic tracks", async () => {
+      const engine = new RecorderEngine();
+      await engine.startMonitoring();
+      const ctx = contexts[0];
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+
+      engine.stop();
+
+      expect(processor.disconnect).toHaveBeenCalled();
+      tracks.forEach((t) => expect(t.stop).toHaveBeenCalled());
+    });
+
+    it("getStream() returns the open stream while monitoring, null otherwise", async () => {
+      const engine = new RecorderEngine();
+      expect(engine.getStream()).toBeNull();
+      await engine.startMonitoring();
+      expect(engine.getStream()).toBe(stream);
+      engine.stop();
+      expect(engine.getStream()).toBeNull();
+    });
+
+    it("respects channelIndex the same way start() does", async () => {
+      const engine = new RecorderEngine();
+      const externalTracks = [new FakeTrack(), new FakeTrack()];
+      const externalStream = new FakeMediaStream(externalTracks) as unknown as MediaStream;
+      const twoChannelSource = new FakeSourceNode();
+      twoChannelSource.channelCount = 2;
+      const ctx = new FakeAudioContext();
+      ctx.createMediaStreamSource = vi.fn(() => twoChannelSource);
+      vi.stubGlobal("AudioContext", vi.fn(function () { return ctx; }));
+
+      await engine.startMonitoring(externalStream, 1);
+
+      const splitter = ctx.createChannelSplitter.mock.results[0].value as FakeSplitterNode;
+      expect(splitter.connect).toHaveBeenCalledWith(ctx.createScriptProcessor.mock.results[0].value, 1);
     });
   });
 });
