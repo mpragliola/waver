@@ -4,6 +4,8 @@ Fast, dependency-free waveform display and interaction component. Core is a fram
 custom element (`<wave-r>`), with thin wrappers for React and Vue that just forward props/events —
 no logic duplication.
 
+## What it does
+
 - Zoom (100% down to single samples), Ctrl+wheel to scroll, Ctrl+Shift+wheel to scroll faster
 - Touch support: two-finger pinch to zoom, two-finger swipe to pan
 - Click-drag to create a selection; drag edges to resize, drag body to move, double-click to clear
@@ -15,6 +17,15 @@ no logic duplication.
 - Spectrogram view as an alternative to the waveform, computed off the main thread
 - Themeable (colors, font, optional Google Font loading, rounded corners)
 
+## Tech stack
+
+- **Core**: TypeScript, compiled to a zero-dependency [Custom Element](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements) (`<wave-r>`), rendered with Canvas 2D. No runtime dependencies.
+- **Audio**: native [Web Audio API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API) for decoding/playback/recording; spectrogram FFT analysis runs off the main thread in Web Workers.
+- **Framework wrappers**: thin React and Vue 3 adapters (optional peer dependencies) that forward props/events to the underlying element — no duplicated logic.
+- **Build**: [Vite](https://vitejs.dev/) (library mode, ES modules only) + `tsc` for declaration files; three entry points (`waver`, `waver/react`, `waver/vue`).
+- **Testing**: [Vitest](https://vitest.dev/) (unit/integration, jsdom) and [Playwright](https://playwright.dev/) (end-to-end, Chromium) against a Vite-served demo app.
+- **CI**: GitHub Actions — typecheck, unit tests, build, and the Playwright e2e suite on every push/PR to `main`.
+
 ## Install
 
 ```bash
@@ -23,7 +34,7 @@ npm install waver
 
 React and Vue are optional peer dependencies — only needed if you use `waver/react` or `waver/vue`.
 
-## Vanilla usage
+## Quick start
 
 ```ts
 import { defineWaverElement, type WaverElement } from "waver";
@@ -48,246 +59,17 @@ waver.addEventListener("waver:cursorchange", (e) => {
 ```
 
 `defineWaverElement(tagName?)` accepts a custom tag name (default `"wave-r"`) if you need to avoid
-collisions.
+collisions. For React and Vue prop/ref/emit reference, see the [API reference](docs/api.md#react-api).
 
-## React usage
+## Documentation
 
-```tsx
-import { useRef } from "react";
-import { Waver, type WaverHandle } from "waver/react";
+This README covers install and a minimal example. For everything else:
 
-function App() {
-  const waverRef = useRef<WaverHandle>(null);
-
-  return (
-    <Waver
-      ref={waverRef}
-      height={260}
-      showZeroLine
-      showMinimap
-      onCursorChange={(pos) => console.log("cursor", pos)}
-      onSelectionChange={(sel) => console.log("selection", sel)}
-    />
-  );
-}
-
-// later, e.g. after decoding a file:
-waverRef.current?.loadAudioBuffer(audioBuffer, audioContext);
-waverRef.current?.play();
-```
-
-All `WaverOptions` (see below) are accepted as props, plus `className`, `style`, and `on*` event
-callbacks. Imperative methods are exposed via the ref (`WaverHandle`).
-
-## Vue usage
-
-```vue
-<template>
-  <Waver
-    ref="waverRef"
-    :height="260"
-    show-zero-line
-    show-minimap
-    @cursorchange="onCursorChange"
-    @selectionchange="onSelectionChange"
-  />
-</template>
-
-<script setup lang="ts">
-import { ref } from "vue";
-import { Waver } from "waver/vue";
-
-const waverRef = ref();
-
-function onCursorChange(pos: number) {
-  console.log("cursor", pos);
-}
-function onSelectionChange(sel: { startSample: number; endSample: number } | null) {
-  console.log("selection", sel);
-}
-
-// later:
-waverRef.value?.loadAudioBuffer(audioBuffer, audioContext);
-waverRef.value?.play();
-</script>
-```
-
-Note: the Vue wrapper exposes every `WaverOptions` prop directly (`height`, `minimapHeightRatio`,
-`theme`, `showZeroLine`, `roundedCorners`, `showMinimap`, `showRuler`, `rulerTimeFormat`,
-`rulerHeight`, `loadButton`, `recordButton`, `hideButtonLabels`, `cancelButton`, `channelIndex`, `viewMode`, `recordViewMode`,
-`recordWindowSeconds`, `spectrogramFftSize`, `spectrogramHop`, `spectrogramFreqBins`) — or set any of
-them imperatively via `element.value?.configure({ showRuler: false })`. There's also an `inputStream`
-prop (React and Vue) that isn't part of `WaverOptions` — see Recording, below.
-
-## Configurable options (`WaverOptions`)
-
-Pass as a partial object to `configure()` (vanilla), as props (React/Vue), or via `defineWaverElement`
-defaults.
-
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `height` | `number \| "auto"` | `100` | Total component height in px (ruler + waveform + minimap). `"auto"` inherits the host element's rendered CSS height instead of setting an explicit px height. |
-| `minimapHeightRatio` | `number` | `0.2` | Fraction of the (post-ruler) height given to the minimap. |
-| `theme` | `Partial<WaverTheme>` | `{}` | Theme overrides, merged onto the base dark theme (see below). |
-| `showZeroLine` | `boolean` | `false` | Draw a faint horizontal zero line over the waveform. |
-| `roundedCorners` | `boolean` | `true` | Round the component's outer corners. |
-| `showMinimap` | `boolean` | `true` | Show/hide the minimap strip. |
-| `showRuler` | `boolean` | `true` | Show/hide the seek ruler strip above the waveform. |
-| `rulerTimeFormat` | `"time" \| "samples"` | `"time"` | Ruler labels as hh:mm:ss/mm:ss/ss or raw sample index. |
-| `rulerHeight` | `number` | `16` | Height (px) of the ruler strip. |
-| `channelIndex` | `number` | `0` | Which channel of a multi-channel recording source to keep. Used by `startRecording()` when called with no explicit `channelIndex` argument (including via the built-in Record button). Falls back to channel 0 if the source has fewer channels. |
-| `loadButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Load File" button shown while no audio is loaded. |
-| `recordButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Record" button shown while no audio is loaded. Use `"disabled"` when several Waver instances share one mic and only one may record at a time. |
-| `hideButtonLabels` | `boolean` | `false` | Hide the text label on the built-in "Load File" / "Record" buttons, showing only the icon. Both buttons keep a static `aria-label` for accessibility regardless of this setting. |
-| `cancelButton` | `"enabled" \| "disabled" \| "hidden"` | `"enabled"` | State of the built-in "Cancel" (X) button shown top-right once audio is loaded. Clicking it opens a confirmation overlay before discarding via `reset()`. |
-| `viewMode` | `"waveform" \| "spectrogram"` | `"waveform"` | Main view content. The minimap always stays on waveform regardless of this. |
-| `recordViewMode` | `"flat" \| "zoom-out" \| "scroll"` | `"scroll"` | Viewport behavior while recording. `"flat"` draws no waveform while capturing. `"zoom-out"` always spans 0 → record head, compressing as it grows. `"scroll"` spans 0 → head until it outgrows `recordWindowSeconds`, then slides a fixed-width window. Ignored during playback. |
-| `recordWindowSeconds` | `number` | `2` | Width (seconds) of the visible window in `"scroll"` record mode. Ignored by the other record modes. |
-| `spectrogramFftSize` | `number` | `2048` | STFT window size in samples (power of two). Larger = finer frequency resolution, coarser time resolution. |
-| `spectrogramHop` | `number` | `512` | STFT hop size in samples. Smaller = finer time resolution, more compute. |
-| `spectrogramFreqBins` | `number` | `128` | Number of log-scaled frequency rows the spectrogram is bucketed down to for display. |
-
-### Spectrogram view
-
-Switch the main view between waveform and spectrogram with `setViewMode()` / `configure({ viewMode })`.
-The minimap is unaffected and always shows the waveform. The spectrogram analysis (windowed FFT
-across the whole loaded buffer) is lazily kicked off the first time you switch into spectrogram
-view, split across several parallel Web Workers, and cached per buffer/resolution — switching
-zoom/pan afterwards reuses it instead of recomputing. While an analysis is in flight the view
-shows a "Calculating spectrogram…" placeholder; listen for `waver:spectrogramready` if you want
-to react to completion yourself (e.g. a custom loading indicator). For very long recordings, the
-effective hop auto-increases to cap total analyzed columns at 20,000 (well beyond any realistic
-viewport width) so extreme file lengths don't analyze at pointlessly fine time resolution.
-
-### Recording
-
-When no audio is loaded, the built-in overlay shows "Load File" and "Record" buttons (each
-controlled independently via `loadButton`/`recordButton`, see above). Clicking Record prompts for
-mic access and starts capturing; a centered readout (pulsing dot, elapsed time, Stop button)
-replaces the overlay while recording. Clicking Stop — or calling `stopRecording()` — ends capture
-and loads the recorded audio in place, same as picking a file.
-
-Drive it imperatively with `startRecording()` / `stopRecording()` / `isRecording()`, and listen for
-`waver:recordstart` / `waver:recordstop` / `waver:recorderror`. Set `recordButton: "disabled"` to
-grey out (but keep visible) the Record button on other instances while one is actively recording —
-useful when several Waver instances on a page share a single mic and only one may record at a time.
-
-Waver never picks an input device on its own — `startRecording()` accepts an explicit `MediaStream`,
-or falls back to one set ahead of time via `setInputStream()` (this is also what the built-in Record
-button records from), or the default mic via `getUserMedia` otherwise.
-
-For a multi-channel source (e.g. a stereo interface with the mic on one input), set `channelIndex`
-(via `configure()`/the `channelIndex` prop, or as `startRecording()`'s second argument) to pick which
-channel is kept — picked, not summed, since summing with a silent second input costs 6 dB and can
-comb the signal if the two aren't in phase.
-
-While capturing, the viewport follows `recordViewMode` (`"scroll"` by default, sliding a
-`recordWindowSeconds`-wide window once the recording outgrows it; see the options table above for
-the other modes). Manual zoom/pan/seek is locked during recording since auto-follow would
-immediately override it.
-
-Call `reset()` to erase any loaded/recorded audio and return to the empty-button state (cancelling
-an in-progress recording if any); `hasAudio()` reports whether audio is currently loaded.
-
-### Theme (`WaverTheme`)
-
-| Field | Type | Description |
-|---|---|---|
-| `waveformColor` | `string` | Waveform fill color. |
-| `backgroundColor` | `string` | Component background. |
-| `cursorColor` | `string` | Playhead color. |
-| `selectionColor` | `string` | Selection overlay color (auto-derived from `waveformColor` if you only override that). |
-| `minimapOverlayColor` | `string` | Minimap viewport overlay color. |
-| `zeroLineColor` | `string` | Zero line color (when `showZeroLine` is on). |
-| `rulerColor` | `string` | Ruler tick/label color. |
-| `fontFamily` | `string` | CSS font-family for ruler/labels. |
-| `googleFont` | `{ family: string; weights?: number[] }` | Optional — injects a Google Fonts stylesheet (deduped across instances). |
-| `roundedCorners` | `boolean` | Theme-level corner rounding (see also the top-level `roundedCorners` option). |
-| `borderRadius` | `number` | Corner radius in px when rounded. |
-| `spectrogramColors` | `string[]` | Gradient stops (hex or rgb(a)), low intensity -> high intensity, used to colormap the spectrogram view. |
-
-Built-in themes: `lightTheme`, `darkTheme` (exported from `waver`). Helpers: `resolveTheme(base, overrides)`,
-`deriveSelectionColor(waveformColor, alpha?)`.
-
-## Public API (element / ref / expose)
-
-| Method | Description |
-|---|---|
-| `configure(options: Partial<WaverOptions>)` | Merge and apply new options. |
-| `loadSamples(samples: Float32Array, sampleRate: number)` | Load raw mono samples (no playback engine). |
-| `loadAudioBuffer(buffer: AudioBuffer, context: AudioContext)` | Load audio + set up playback via `AudioEngine`. |
-| `connectExternalAudioNode(node: AudioNode \| null)` | Splice a custom `AudioNode` into the playback signal chain. |
-| `play()` / `stop()` / `togglePlayback()` | Playback controls (host wires its own buttons/shortcuts). |
-| `setZoom(zoom: Partial<ZoomState>, animate = true)` | Set `{ samplesPerPixel, offsetSample }` (clamped to valid range). Eases to the target unless `animate` is `false`. |
-| `zoomToFull()` | Reset zoom to fit the whole waveform. |
-| `setSelection(selection: SelectionRange \| null, final = true)` | Set/clear the selection (also used as the loop range). Pass `final: false` for intermediate updates (e.g. drag) — suppresses the settled `selectionchanged`/`selectionreset` event until a later call commits it. |
-| `setCursorPosition(sample: number, emitEvent = true)` | Move the playhead without seeking playback. Pass `emitEvent: false` to skip the `waver:cursorchange` event. |
-| `getSelection()` / `getCursorPosition()` / `getZoom()` / `getSampleRate()` | Getters. |
-| `setViewMode(mode: "waveform" \| "spectrogram")` | Switch the main view (minimap stays waveform). |
-| `getViewMode()` | Current main view mode. |
-| `startRecording(stream?: MediaStream, channelIndex?: number)` | Starts mic capture via the same path as the built-in Record button. Omitted arguments fall back to `inputStream`/`channelIndex` set ahead of time, then the default mic/channel 0. |
-| `stopRecording()` | Stops an in-progress recording and loads the captured audio, same as if it had been picked via Load File. |
-| `isRecording()` | Whether a recording is currently in progress. |
-| `setInputStream(stream: MediaStream \| null)` / `getInputStream()` | Set/get the stream `startRecording()` (including the built-in Record button) uses when called with no explicit stream. |
-| `setChannelIndex(index: number)` / `getChannelIndex()` | Set/get the channel `startRecording()` (including the built-in Record button) picks out of a multi-channel source. |
-| `getSamples()` | Current sample buffer — loaded audio, or (mid-recording) what's been captured so far. Empty array if nothing is loaded. |
-| `reset()` | Erases any loaded/recorded audio and returns to the empty-button state, cancelling an in-progress recording if any. |
-| `hasAudio()` | Whether audio is currently loaded. |
-
-React/Vue note: the ref/`expose()` surface mirrors this table (see usage examples above); use
-`element()` (React) / `element` (Vue expose) to reach the underlying `WaverElement` for any method
-not forwarded by the wrapper. The `inputStream` prop is the React/Vue equivalent of `setInputStream()`,
-and the `channelIndex` prop mirrors `setChannelIndex()`.
-
-## Events
-
-`SelectionEventDetail` is `{ selection: SelectionRange | null; startSample: number | null; endSample: number | null; durationSample: number | null }`.
-
-| Event | Detail | Fires on |
-|---|---|---|
-| `waver:cursorchange` | `{ positionSample: number }` | Cursor moved (click, ruler drag, or continuously during playback). |
-| `waver:selectionchange` | `SelectionEventDetail` | Every intermediate selection update, including each step of a drag. |
-| `waver:selectionchanged` | `SelectionEventDetail` | A selection change settles (drag end, or any non-drag `setSelection` call that yields a non-null selection). |
-| `waver:selectionreset` | `SelectionEventDetail` | A selection change settles to no selection (cleared, or reset to full). |
-| `waver:zoomchange` | `{ zoom: ZoomState }` | Zoom or pan changed (wheel, minimap drag). |
-| `waver:play` | `{ positionSample: number }` | Playback started. |
-| `waver:stop` | `{ positionSample: number }` | Playback stopped. |
-| `waver:loop` | `{ positionSample: number }` | Playback looped back to the selection start. |
-| `waver:viewmodechange` | `{ viewMode: "waveform" \| "spectrogram" }` | Main view mode switched. |
-| `waver:spectrogramready` | `{}` | The background spectrogram analysis for the current buffer/resolution resolved. |
-| `waver:recordstart` | `{}` | Mic recording started. |
-| `waver:recordstop` | `{ positionSample: number }` | Mic recording stopped and the captured audio was loaded. |
-| `waver:recorderror` | `{ error: Error }` | Recording failed to start (e.g. mic permission denied). |
-| `waver:loaderror` | `{ error: Error }` | A file picked via the built-in Load button failed to decode. |
-| `waver:reset` | `{}` | `reset()` erased loaded/recorded audio and returned to the empty-button state. |
-
-React: `onCursorChange` / `onSelectionChange` / `onZoomChange` / `onPlay` / `onStop` / `onLoop` /
-`onViewModeChange` / `onSpectrogramReady` / `onRecordStart` / `onRecordStop` / `onRecordError` /
-`onLoadError` / `onReset` props.
-Vue: `@cursorchange` / `@selectionchange` / `@zoomchange` / `@play` / `@stop` / `@loop` /
-`@viewmodechange` / `@spectrogramready` / `@recordstart` / `@recordstop` / `@recorderror` /
-`@loaderror` / `@reset`.
-
-Note: the React/Vue wrappers only forward the continuous `waver:selectionchange` (as
-`onSelectionChange`/`@selectionchange`, with just the plain `SelectionRange | null` — not the full
-`SelectionEventDetail`) — they do not yet forward the settled `selectionchanged`/`selectionreset`
-events. Use `element()`/`element` to listen for those directly on the underlying `WaverElement` if
-you need settle-only notifications in React/Vue.
-
-## Interaction reference
-
-- **Waveform body**: click-drag to create a selection; drag a selection edge to resize; drag the
-  selection body to move it; double-click to clear it; plain click (no drag) moves the cursor (and
-  seeks playback if already playing).
-- **Ruler strip**: click/drag to move the cursor and, if already playing, seek playback there —
-  without touching selection state.
-- **Mouse wheel**: zoom in/out, pivoting on the cursor.
-- **Ctrl + wheel**: scroll (pan) the waveform.
-- **Ctrl + Shift + wheel**: scroll faster.
-- **Minimap**: click/drag to pan the main viewport, centered on the pointer (animated).
-- **Touch**: two-finger pinch to zoom (pivoting on the pinch midpoint), two-finger swipe to pan.
-  Single-finger touch drives the same selection/cursor gestures as mouse. All interaction is locked
-  while a recording is in progress (see Recording, above).
+- **[Usage manual](docs/manual.md)** — guided walkthrough of every feature (loading, recording, zoom/pan,
+  selection, playback, view modes, theming, built-in buttons, error states), illustrated with
+  screenshots.
+- **[API reference](docs/api.md)** — full `WaverOptions`/`WaverTheme` tables, every `WaverElement`
+  method, every event, and the complete React/Vue props/emits/ref surface.
 
 ## Development
 
