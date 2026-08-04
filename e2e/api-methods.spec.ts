@@ -18,11 +18,14 @@ test.describe("API methods", () => {
   test("getSampleRate() returns correct rate from loaded audio", async ({ page }) => {
     await loadTone(page);
 
+    // decodeAudioData() resamples to the AudioContext's hardware output rate, which is
+    // environment-dependent (commonly 44100 or 48000) rather than the source file's native rate.
     const sampleRate = await page.evaluate(() => {
-      return (document.getElementById("waver") as any).getSampleRate();
+      const waver = document.getElementById("waver") as any;
+      return { reported: waver.getSampleRate(), contextRate: new AudioContext().sampleRate };
     });
 
-    expect(sampleRate).toBe(44100);
+    expect(sampleRate.reported).toBe(sampleRate.contextRate);
   });
 
   test("getCursorPosition() starts at 0 and changes on click", async ({ page }) => {
@@ -193,18 +196,14 @@ test.describe("API methods", () => {
   });
 
   test("getInputStream() / setInputStream() work correctly", async ({ page }) => {
-
-    let stream = await page.evaluate(() => {
-      return (document.getElementById("waver") as any).getInputStream();
-    });
-    expect(stream).toBeNull();
-
-    // Can't easily create a real stream in test, but API should not error
+    // The demo page auto-acquires the mic on load (main.ts calls setInputStream() once
+    // getUserMedia resolves), so the initial state isn't reliably null here; assert the
+    // null round-trip via setInputStream(null) instead of a pristine starting state.
     await page.evaluate(() => {
       (document.getElementById("waver") as any).setInputStream(null);
     });
 
-    stream = await page.evaluate(() => {
+    const stream = await page.evaluate(() => {
       return (document.getElementById("waver") as any).getInputStream();
     });
     expect(stream).toBeNull();

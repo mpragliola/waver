@@ -3,6 +3,10 @@ import { expect, test } from "@playwright/test";
 // Fake mic support (--use-fake-device-for-media-stream + the microphone permission grant) is wired
 // up chromium-only in playwright.config.ts; these specs never run under firefox/webkit projects.
 
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+});
+
 test("recording lifecycle: start shows the timer/stop UI, stop loads captured audio", async ({ page }) => {
   const waver = page.locator("wave-r");
 

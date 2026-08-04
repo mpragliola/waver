@@ -19,7 +19,7 @@ test.describe("configuration options", () => {
 
   test("loadButton: 'disabled' greys out the Load button", async ({ page }) => {
     const waver = page.locator("wave-r");
-    const loadBtn = waver.locator(".waver-empty-overlay .waver-action-btn");
+    const loadBtn = waver.locator(".waver-empty-overlay .waver-action-btn[aria-label='Load File']");
 
     await page.evaluate(() => {
       (document.getElementById("waver") as any).configure({ loadButton: "disabled" });
@@ -35,7 +35,7 @@ test.describe("configuration options", () => {
       (document.getElementById("waver") as any).configure({ recordButton: "hidden" });
     });
     // Record button should not be visible
-    const recordBtn = waver.locator(".waver-action-btn--record");
+    const recordBtn = waver.locator(".waver-empty-overlay .waver-action-btn--record");
     await expect(recordBtn).not.toBeVisible();
 
     await page.evaluate(() => {
