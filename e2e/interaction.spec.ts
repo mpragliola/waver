@@ -12,6 +12,10 @@ async function loadTone(page: import("@playwright/test").Page) {
   await expect(page.locator("#status")).toHaveText("");
 }
 
+test.beforeEach(async ({ page }) => {
+  await page.goto("/");
+});
+
 test("click-drag on the waveform creates a selection", async ({ page }) => {
   await captureWaverEvents(page, ["waver:selectionchanged"]);
   await loadTone(page);
