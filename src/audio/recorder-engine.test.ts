@@ -139,6 +139,36 @@ describe("RecorderEngine", () => {
     expect(getUserMedia).toHaveBeenCalledTimes(1);
   });
 
+  it("is a no-op to start() while already monitoring, without leaking the open graph", async () => {
+    const engine = new RecorderEngine();
+    await engine.startMonitoring();
+    const ctx = contexts[0];
+    const openStream = engine.getStream();
+
+    await engine.start();
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(contexts).toHaveLength(1);
+    expect(engine.getContext()).toBe(ctx);
+    expect(engine.getStream()).toBe(openStream);
+    expect(engine.isRecording).toBe(false); // start() no-opped, so it never flipped to recording
+  });
+
+  it("is a no-op to startMonitoring() while already recording", async () => {
+    const engine = new RecorderEngine();
+    await engine.start();
+    const ctx = contexts[0];
+    const openStream = engine.getStream();
+
+    await engine.startMonitoring();
+
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(contexts).toHaveLength(1);
+    expect(engine.getContext()).toBe(ctx);
+    expect(engine.getStream()).toBe(openStream);
+    expect(engine.isRecording).toBe(true); // still recording, startMonitoring() no-opped
+  });
+
   it("reports sample rate from the active context, defaulting to 44100 before start()", async () => {
     const engine = new RecorderEngine();
     expect(engine.getSampleRate()).toBe(44100);
@@ -194,6 +224,17 @@ describe("RecorderEngine", () => {
     await engine.start();
 
     expect(engine.isRecording).toBe(true);
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(contexts).toHaveLength(2);
+  });
+
+  it("allows restarting monitoring after stop()", async () => {
+    const engine = new RecorderEngine();
+    await engine.startMonitoring();
+    engine.stop();
+    await engine.startMonitoring();
+
+    expect(engine.getStream()).not.toBeNull();
     expect(getUserMedia).toHaveBeenCalledTimes(2);
     expect(contexts).toHaveLength(2);
   });

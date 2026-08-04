@@ -70,7 +70,7 @@ export class RecorderEngine {
    * signal. Falls back to channel 0 if the source has fewer channels than requested.
    */
   async start(stream?: MediaStream, channelIndex = 0): Promise<void> {
-    if (this.recording) return;
+    if (this.processor) return; // a capture/monitoring graph is already open
     await this.openGraph(stream, channelIndex, (chunk) => this.events.onData?.(chunk));
     this.recording = true;
   }
@@ -81,7 +81,7 @@ export class RecorderEngine {
    * for treating this as a distinct (non-"recording") state, since `isRecording` stays false.
    */
   async startMonitoring(stream?: MediaStream, channelIndex = 0): Promise<void> {
-    if (this.context) return; // already open (monitoring or recording)
+    if (this.processor) return; // a capture/monitoring graph is already open
     await this.openGraph(stream, channelIndex, undefined, (db) => this.events.onLevel?.(db));
   }
 
