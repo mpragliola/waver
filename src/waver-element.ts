@@ -480,6 +480,7 @@ export class WaverElement extends HTMLElement {
       // loadAudioBuffer -> loadSamples always resets to fullZoom(), independent of recordViewMode:
       // the record-mode viewport is intentionally a capture-only affordance, not carried into playback.
       this.loadAudioBuffer(buffer, context);
+      this.emit("waver:recordsuccess", { durationSample: this.samples.length, sampleRate });
     } else {
       this.updateOverlay();
       this.render();
@@ -527,6 +528,7 @@ export class WaverElement extends HTMLElement {
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await context.decodeAudioData(arrayBuffer);
       this.loadAudioBuffer(audioBuffer, context);
+      this.emit("waver:loadsuccess", { durationSample: this.samples.length, sampleRate: this.sampleRate });
     } catch (err) {
       this.emit("waver:loaderror", { error: err as Error });
     }

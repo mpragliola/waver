@@ -134,4 +134,8 @@ export type WaverEventMap = {
   "waver:spectrogramready": Record<string, never>;
   /** Fires when reset() erases loaded/recorded audio and returns to the empty-button state. */
   "waver:reset": Record<string, never>;
+  /** Fires when a file is successfully loaded via the built-in Load File button. */
+  "waver:loadsuccess": { durationSample: number; sampleRate: number };
+  /** Fires when recording successfully stops and audio is loaded into the component. */
+  "waver:recordsuccess": { durationSample: number; sampleRate: number };
 };
