@@ -167,6 +167,8 @@ export class RecorderEngine {
     this.splitterNode?.disconnect();
     this.sourceNode?.disconnect();
     this.silentGain?.disconnect();
+    this.context.close().catch(() => {});
+    this.context = null;
     this.processor = null;
     this.splitterNode = null;
     this.sourceNode = null;

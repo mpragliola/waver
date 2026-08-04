@@ -406,7 +406,7 @@ describe("RecorderEngine", () => {
       expect(splitter.connect).toHaveBeenCalledWith(ctx.createScriptProcessor.mock.results[0].value, 1);
     });
 
-    it("releaseNodesOnly() disconnects nodes without stopping tracks, even for a self-acquired stream", async () => {
+    it("releaseNodesOnly() disconnects nodes and closes the context, without stopping tracks, even for a self-acquired stream", async () => {
       const engine = new RecorderEngine();
       await engine.startMonitoring(); // no explicit stream -> acquired via getUserMedia -> ownsStream is true
       const ctx = contexts[0];
@@ -415,8 +415,10 @@ describe("RecorderEngine", () => {
       engine.releaseNodesOnly();
 
       expect(processor.disconnect).toHaveBeenCalled();
+      expect(ctx.close).toHaveBeenCalled(); // must close the abandoned AudioContext to avoid leaking it
       tracks.forEach((t) => expect(t.stop).not.toHaveBeenCalled());
       expect(engine.getStream()).toBeNull();
+      expect(engine.getContext()).toBeNull();
     });
   });
 });
