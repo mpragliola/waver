@@ -1065,6 +1065,8 @@ function styleSheet(): HTMLStyleElement {
     .waver-action-btn:hover:not(:disabled) { background: rgba(127, 127, 127, 0.15); }
     .waver-action-btn:active:not(:disabled) { transform: scale(0.96); }
     .waver-action-btn--record { color: #E53E3E; border-color: #E53E3E; }
+    .waver-action-btn--monitor { color: #2B6CB0; border-color: #2B6CB0; }
+    .waver-action-btn--monitor.waver-action-btn--active { background: #2B6CB0; color: #fff; }
     .waver-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .waver-action-btn--icon-only {
       padding: 8px; border-radius: 50%; gap: 0;
@@ -1072,6 +1074,20 @@ function styleSheet(): HTMLStyleElement {
       box-sizing: border-box;
     }
     .waver-action-btn--icon-only span { display: none; }
+
+    .waver-vu-meter {
+      position: absolute; left: 14px; top: 14px; bottom: 14px; z-index: 5;
+      width: 12px; border-radius: 999px; overflow: hidden;
+      background: rgba(127, 127, 127, 0.18); border: 1px solid rgba(127, 127, 127, 0.3);
+      display: none;
+    }
+    .waver-vu-meter-fill {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+      background: #38A169; border-radius: 999px;
+      transition: height 300ms ease-out, background-color 120ms ease;
+    }
+    .waver-vu-meter-fill--warn { background: #ECC94B; }
+    .waver-vu-meter-fill--clip { background: #E53E3E; }
 
     .waver-cancel-btn {
       position: absolute; top: 8px; right: 8px; z-index: 6;
