@@ -424,6 +424,8 @@ No commit here — proceed directly into Task 3, which uses this markup/CSS and 
 - Modify: `src/waver-element.ts`
 - Test: `src/waver-element.test.ts`
 - Test helpers: `src/waver-element.test-helpers.ts` (read, likely no changes needed — reuses `makeFakeMediaStream()`)
+- Modify: `src/audio/recorder-engine.ts` — Step 10 below adds `RecorderEngine.releaseNodesOnly()` here. This was originally meant to land in Task 1 but was left out of that task's brief; it belongs to Task 3 because `startRecording()`'s handoff (Step 9) is the only caller and Task 1 has already been reviewed and closed.
+- Test: `src/audio/recorder-engine.test.ts` — the unit test for `releaseNodesOnly()` from Step 10.
 
 **Interfaces:**
 - Consumes:
