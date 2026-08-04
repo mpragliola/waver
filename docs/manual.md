@@ -171,8 +171,9 @@ zoom/pan/seek is locked during recording since auto-follow would immediately ove
 Set `recordButton: "disabled"` to grey out (but keep visible) the Record button on other instances
 while one is actively recording — useful when several Waver instances share a single mic and only
 one may record at a time. Stereo/multichannel sources use `channelIndex` (config option or
-`startRecording()`'s second argument) to pick which channel is kept; the loaded audio retains all
-channels and is accessible via `getChannelCount()` / `getChannels()`.
+`startRecording()`'s second argument) to control what's kept: a number (0-based) picks a single
+channel, `"all"` (the recommended way to record stereo) keeps every channel. Either way the loaded
+audio's channels are accessible via `getChannelCount()` / `getChannels()`.
 
 ---
 

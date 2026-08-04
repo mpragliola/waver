@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `channelIndex` argument to `startRecording()`, for picking a specific channel out of a
   multi-channel recording source (falls back to channel 0 if the source is narrower than
   requested). The `channelIndex` prop in the React/Vue wrappers mirrors `inputStream`.
+- `channelIndex` now also accepts `"all"` to record every channel of a multi-channel source
+  instead of picking one — live chunks are de-interleaved per channel as they arrive, and
+  `stopRecording()` loads a full multi-channel `AudioBuffer`, readable via `getChannels()` the
+  same way a loaded stereo file already was.
 - `getSamples()` / `getSampleRate()` methods to read back the currently loaded (or, mid-recording,
   in-progress) sample buffer — lets a host app pull a just-finished recording out after
   `waver:recordstop` without re-deriving it from the original stream.
