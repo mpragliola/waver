@@ -413,11 +413,14 @@ export class WaverElement extends HTMLElement {
     for (let i = 0; i < buffer.numberOfChannels; i++) {
       channels.push(buffer.getChannelData(i));
     }
-    this.channelSamples = channels;
 
     // For waveform rendering: use the first channel (or mix if stereo, for now just use L)
     const mono = buffer.numberOfChannels > 0 ? buffer.getChannelData(0) : new Float32Array(0);
     this.loadSamples(mono, buffer.sampleRate);
+
+    // Preserve channel data after loadSamples (which resets it)
+    this.channelSamples = channels;
+
     this.audioEngine = new AudioEngine(context, {
       onPlay: (pos) => this.emit("waver:play", { positionSample: pos }),
       onStop: (pos) => this.emit("waver:stop", { positionSample: pos }),
