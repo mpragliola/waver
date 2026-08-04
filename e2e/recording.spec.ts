@@ -7,7 +7,7 @@ test("recording lifecycle: start shows the timer/stop UI, stop loads captured au
   await page.goto("/");
   const waver = page.locator("wave-r");
 
-  await waver.locator(".waver-action-btn--record").click();
+  await waver.locator(".waver-empty-overlay .waver-action-btn--record").click();
 
   await expect(page.locator("#status")).toContainText("Recording");
   await expect(waver.locator(".waver-recording-bar")).toBeVisible();
@@ -22,13 +22,13 @@ test("recording lifecycle: start shows the timer/stop UI, stop loads captured au
   await expect(waver.locator(".waver-recording-bar")).toBeHidden();
   await expect(page.locator("#status")).toHaveText("");
   // A successful stop with captured audio hides the empty-state Load/Record buttons entirely.
-  await expect(waver.locator(".waver-action-btn--record")).toBeHidden();
+  await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
 });
 
 test("interaction is locked on the waveform while recording", async ({ page }) => {
   await page.goto("/");
   const waver = page.locator("wave-r");
-  await waver.locator(".waver-action-btn--record").click();
+  await waver.locator(".waver-empty-overlay .waver-action-btn--record").click();
   await expect(waver.locator(".waver-recording-bar")).toBeVisible();
 
   const waveform = waver.locator(".waver-waveform");
@@ -53,7 +53,7 @@ test("recordButton: 'disabled' via configure() prevents starting a recording fro
     });
   });
 
-  const recordBtn = waver.locator(".waver-action-btn--record");
+  const recordBtn = waver.locator(".waver-empty-overlay .waver-action-btn--record");
   await expect(recordBtn).toBeVisible();
   await expect(recordBtn).toBeDisabled();
 

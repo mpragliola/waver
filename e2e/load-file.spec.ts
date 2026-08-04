@@ -15,7 +15,7 @@ test.describe("loading a file via the built-in Load button", () => {
     await fileInput.setInputFiles(TONE_WAV);
 
     // The Load/Record overlay buttons and the empty state disappear once samples decode.
-    await expect(waver.locator(".waver-action-btn--record")).toBeHidden();
+    await expect(waver.locator(".waver-empty-overlay")).toBeHidden();
     await expect(page.locator("#status")).toHaveText("");
   });
 
