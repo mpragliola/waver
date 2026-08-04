@@ -636,7 +636,11 @@ export class WaverElement extends HTMLElement {
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await context.decodeAudioData(arrayBuffer);
       this.loadAudioBuffer(audioBuffer, context);
-      this.emit("waver:loadsuccess", { durationSample: this.samples.length, sampleRate: this.sampleRate });
+      this.emit("waver:loadsuccess", {
+        durationSample: this.samples.length,
+        sampleRate: this.sampleRate,
+        fileName: file.name,
+      });
     } catch (err) {
       this.emit("waver:loaderror", { error: err as Error });
     }
@@ -760,6 +764,12 @@ export class WaverElement extends HTMLElement {
    * has been captured so far. Empty array if nothing is loaded. */
   getSamples(): Float32Array {
     return this.samples;
+  }
+
+  /** Per-channel sample buffers for the currently loaded audio (e.g. [left, right] for stereo).
+   * Empty array if nothing is loaded or the source was mono-only (use getSamples() for mono). */
+  getChannels(): Float32Array[] {
+    return this.channelSamples;
   }
 
   getViewMode(): ViewMode {

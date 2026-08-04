@@ -343,8 +343,8 @@ getSamples(): Float32Array
 ```
 Returns the current sample buffer — whatever's loaded (file, prior recording) or, mid-recording,
 what has been captured so far. Empty array if nothing is loaded. For stereo/multichannel audio,
-this returns the first channel; use `getChannelCount()` to detect multichannel and `getChannelData()`
-to access other channels.
+this returns the first channel; use `getChannelCount()` to detect multichannel and `getChannels()`
+to access all channels.
 
 ```ts
 getChannelCount(): number
@@ -352,10 +352,10 @@ getChannelCount(): number
 Returns the number of channels in the currently loaded audio (1 for mono, 2+ for stereo/multichannel).
 
 ```ts
-getChannelData(channelIndex: number): Float32Array
+getChannels(): Float32Array[]
 ```
-Returns the sample buffer for a specific channel (0-based). Falls back to channel 0 if the index
-is out of range. Returns an empty array if nothing is loaded.
+Returns per-channel sample buffers for the currently loaded audio (e.g. `[left, right]` for
+stereo). Empty array if nothing is loaded or the source was mono-only (use `getSamples()` for mono).
 
 ```ts
 getViewMode(): ViewMode
@@ -392,7 +392,7 @@ below; `detail` is the payload shape shown.
 | `waver:viewmodechange` | `{ viewMode: ViewMode }` | `setViewMode()` or `configure({ viewMode })` actually changes the view mode. |
 | `waver:spectrogramready` | `{}` | The background spectrogram analysis for the current buffer/resolution resolves (only relevant in `viewMode: "spectrogram"`). |
 | `waver:reset` | `{}` | `reset()` erases loaded/recorded audio and returns to the empty-button state. |
-| `waver:loadsuccess` | `{ durationSample: number; sampleRate: number }` | A file successfully loads via the built-in Load File button. |
+| `waver:loadsuccess` | `{ durationSample: number; sampleRate: number; fileName: string }` | A file successfully loads via the built-in Load File button. |
 | `waver:recordsuccess` | `{ durationSample: number; sampleRate: number }` | Recording successfully stops and audio is loaded into the component. |
 
 `SelectionEventDetail` shape (used by all three selection events):
@@ -454,7 +454,7 @@ Plus:
 | `onViewModeChange` | `(viewMode: ViewMode) => void` | Maps to `waver:viewmodechange`. |
 | `onSpectrogramReady` | `() => void` | Maps to `waver:spectrogramready`. |
 | `onReset` | `() => void` | Maps to `waver:reset`. |
-| `onLoadSuccess` | `(detail: { durationSample: number; sampleRate: number }) => void` | Maps to `waver:loadsuccess`. |
+| `onLoadSuccess` | `(detail: { durationSample: number; sampleRate: number; fileName: string }) => void` | Maps to `waver:loadsuccess`. |
 | `onRecordSuccess` | `(detail: { durationSample: number; sampleRate: number }) => void` | Maps to `waver:recordsuccess`. |
 
 ### `WaverHandle` (imperative ref)
@@ -483,9 +483,8 @@ interface WaverHandle {
   getViewMode: () => ViewMode;
   element: () => WaverElement | null;
   getSamples: () => Float32Array;
+  getChannels: () => Float32Array[];
   getSampleRate: () => number;
-  getChannelCount: () => number;
-  getChannelData: (channelIndex: number) => Float32Array;
 }
 ```
 
@@ -495,8 +494,9 @@ Notes on gaps versus the core element's full method surface:
 - `setSelection` on the handle always calls the core method with its default `final = true` — there
   is no way to pass `final: false` through the handle. Use `element()?.setSelection(range, false)`
   for drag-style intermediate updates.
-- `setChannelIndex`/`getChannelIndex`/`setInputStream`/`getInputStream` are not exposed on the
-  handle at all (channel/stream are settable only via the `channelIndex`/`inputStream` props). Use
+- `getChannelCount`/`setChannelIndex`/`getChannelIndex`/`setInputStream`/`getInputStream` are not
+  exposed on the handle at all (channel count can be derived from `getChannels().length`; channel/
+  stream are settable only via the `channelIndex`/`inputStream` props). Use
   `element()` for direct access if needed.
 - `element()` returns the underlying `WaverElement` (or `null` before mount) as an escape hatch for
   anything not covered above, including adding listeners for `waver:selectionchanged` /
@@ -554,7 +554,7 @@ ultimately map to the same `WaverOptions.channelIndex`).
 | `viewmodechange` | `viewMode: ViewMode` | `waver:viewmodechange` |
 | `spectrogramready` | — | `waver:spectrogramready` |
 | `reset` | — | `waver:reset` |
-| `loadsuccess` | `durationSample, sampleRate` | `waver:loadsuccess` |
+| `loadsuccess` | `durationSample, sampleRate, fileName` | `waver:loadsuccess` |
 | `recordsuccess` | `durationSample, sampleRate` | `waver:recordsuccess` |
 
 ### Exposed methods (`ref`/`expose`)

@@ -55,7 +55,7 @@ export const Waver = defineComponent({
     monitorstart: () => true,
     monitorstop: () => true,
     loaderror: (_error: Error) => true,
-    loadsuccess: (_detail: { durationSample: number; sampleRate: number }) => true,
+    loadsuccess: (_detail: { durationSample: number; sampleRate: number; fileName: string }) => true,
     recordsuccess: (_detail: { durationSample: number; sampleRate: number }) => true,
     viewmodechange: (_viewMode: ViewMode) => true,
     spectrogramready: () => true,
@@ -161,6 +161,7 @@ export const Waver = defineComponent({
       getViewMode: () => elRef.value?.getViewMode() ?? "waveform",
       element: () => elRef.value,
       getSamples: () => elRef.value?.getSamples() ?? new Float32Array(0),
+      getChannels: () => elRef.value?.getChannels() ?? [],
       getSampleRate: () => elRef.value?.getSampleRate() ?? 44100,
     });
 

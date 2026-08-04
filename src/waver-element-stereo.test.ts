@@ -80,6 +80,21 @@ describe("WaverElement stereo audio support", () => {
       expect(el.getChannelCount()).toBe(2);
     });
 
+    it("exposes per-channel sample buffers via getChannels()", () => {
+      const el = mount();
+      const left = new Float32Array([0.1, 0.2, 0.3]);
+      const right = new Float32Array([0.3, 0.2, 0.1]);
+      const buffer = makeStereoAudioBuffer(left, right, 44100);
+      const ctx = makeFakeAudioContext();
+
+      el.loadAudioBuffer(buffer, ctx as unknown as AudioContext);
+
+      const channels = el.getChannels();
+      expect(channels).toHaveLength(2);
+      expect(channels[0]).toEqual(left);
+      expect(channels[1]).toEqual(right);
+    });
+
     it("accepts multichannel audio (5.1 surround, etc.)", () => {
       const el = mount();
       const channels = [

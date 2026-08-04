@@ -281,8 +281,13 @@ describe("Vue Waver wrapper", () => {
     fileInput.dispatchEvent(new Event("change"));
 
     await vi.waitFor(() => expect(wrapper.emitted("loadsuccess")).toHaveLength(1));
-    const detail = wrapper.emitted("loadsuccess")![0][0] as { durationSample: number; sampleRate: number };
+    const detail = wrapper.emitted("loadsuccess")![0][0] as {
+      durationSample: number;
+      sampleRate: number;
+      fileName: string;
+    };
     expect(detail.sampleRate).toBeGreaterThan(0);
+    expect(detail.fileName).toBe("test.wav");
   });
 
   it("removes event listeners on unmount (no stale emits)", async () => {

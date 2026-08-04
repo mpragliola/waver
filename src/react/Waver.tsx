@@ -31,6 +31,7 @@ export interface WaverHandle {
   getViewMode: () => ViewMode;
   element: () => WaverElement | null;
   getSamples: () => Float32Array;
+  getChannels: () => Float32Array[];
   getSampleRate: () => number;
 }
 
@@ -56,6 +57,8 @@ export interface WaverProps extends Partial<WaverOptions> {
   onViewModeChange?: (viewMode: ViewMode) => void;
   onSpectrogramReady?: () => void;
   onReset?: () => void;
+  onLoadSuccess?: (detail: { durationSample: number; sampleRate: number; fileName: string }) => void;
+  onRecordSuccess?: (detail: { durationSample: number; sampleRate: number }) => void;
 }
 
 /** React wrapper around the `<wave-r>` custom element. Configure/load data imperatively via the ref. */
@@ -79,6 +82,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onViewModeChange,
     onSpectrogramReady,
     onReset,
+    onLoadSuccess,
+    onRecordSuccess,
     ...options
   } = props;
   const elRef = useRef<WaverElement | null>(null);
@@ -111,6 +116,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       getViewMode: () => elRef.current?.getViewMode() ?? "waveform",
       element: () => elRef.current,
       getSamples: () => elRef.current?.getSamples() ?? new Float32Array(0),
+      getChannels: () => elRef.current?.getChannels() ?? [],
       getSampleRate: () => elRef.current?.getSampleRate() ?? 44100,
     }),
     []
@@ -145,6 +151,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       ["waver:viewmodechange", ((e: CustomEvent) => onViewModeChange?.(e.detail.viewMode)) as EventListener],
       ["waver:spectrogramready", (() => onSpectrogramReady?.()) as EventListener],
       ["waver:reset", (() => onReset?.()) as EventListener],
+      ["waver:loadsuccess", ((e: CustomEvent) => onLoadSuccess?.(e.detail)) as EventListener],
+      ["waver:recordsuccess", ((e: CustomEvent) => onRecordSuccess?.(e.detail)) as EventListener],
     ];
     handlers.forEach(([type, handler]) => el.addEventListener(type, handler));
     return () => handlers.forEach(([type, handler]) => el.removeEventListener(type, handler));
@@ -164,6 +172,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onViewModeChange,
     onSpectrogramReady,
     onReset,
+    onLoadSuccess,
+    onRecordSuccess,
   ]);
 
   return <wave-r ref={elRef as never} class={className as never} style={style as never} />;
