@@ -175,10 +175,11 @@ playback support).
 ```ts
 loadAudioBuffer(buffer: AudioBuffer, context: AudioContext): void
 ```
-Extracts channel 0 of `buffer` (or an empty buffer if `buffer.numberOfChannels === 0`) as mono
-samples and calls `loadSamples`, then constructs an internal `AudioEngine` bound to `context` for
-playback, wiring `waver:play` / `waver:stop` / `waver:loop` and cursor-follow during playback. This
-is what the built-in Load File flow and `stopRecording()` both use internally.
+Extracts all channels from `buffer` and stores them for stereo/multichannel rendering. The first
+channel is used as the main mono playback/waveform display. Constructs an internal `AudioEngine`
+bound to `context` for playback, wiring `waver:play` / `waver:stop` / `waver:loop` and
+cursor-follow during playback. This is what the built-in Load File flow and `stopRecording()` both
+use internally.
 
 ```ts
 connectExternalAudioNode(node: AudioNode | null): void
@@ -341,7 +342,20 @@ Returns the sample rate (Hz) of the currently loaded/recorded audio; `44100` if 
 getSamples(): Float32Array
 ```
 Returns the current sample buffer — whatever's loaded (file, prior recording) or, mid-recording,
-what has been captured so far. Empty array if nothing is loaded.
+what has been captured so far. Empty array if nothing is loaded. For stereo/multichannel audio,
+this returns the first channel; use `getChannelCount()` to detect multichannel and `getChannelData()`
+to access other channels.
+
+```ts
+getChannelCount(): number
+```
+Returns the number of channels in the currently loaded audio (1 for mono, 2+ for stereo/multichannel).
+
+```ts
+getChannelData(channelIndex: number): Float32Array
+```
+Returns the sample buffer for a specific channel (0-based). Falls back to channel 0 if the index
+is out of range. Returns an empty array if nothing is loaded.
 
 ```ts
 getViewMode(): ViewMode
@@ -370,12 +384,16 @@ below; `detail` is the payload shape shown.
 | `waver:stop` | `{ positionSample: number }` | Playback stops with `positionSample` = the position it stopped at. Fires both when `stop()`/`togglePlayback()` is called explicitly while playing, and when a source reaches its natural end with no loop range active (playback state returns to `"idle"` either way). Does **not** fire on a loop restart (see `waver:loop`) — only on stops that are not immediately followed by a re-`play()`. |
 | `waver:loop` | `{ positionSample: number }` | Playback reaches the end of the active loop range (or the source's natural end, if a loop range is set and it's reached first) and restarts from `loopRange.startSample`. The loop range is set via `setSelection()` (selection doubles as loop range — `setSelection` calls `AudioEngine.setLoopRange(selection)` internally) and cleared when selection is cleared. `positionSample` is always the loop range's `startSample`. A `waver:play` also fires for the same restart (loop = stop-less replay, not a stop+play pair). |
 | `waver:recordstart` | `{}` | The built-in Record button (or a direct `startRecording()` call) successfully starts a mic/stream capture. |
+| `waver:monitorstart` | `{}` | The built-in Monitor button opens the mic for level metering (not recording). |
+| `waver:monitorstop` | `{}` | Monitoring stops, via the Monitor button, an exit path (reset/Load File/Escape), or a handoff into `startRecording()`. |
 | `waver:recordstop` | `{ positionSample: number }` | Recording stops, whether or not a file load follows (`positionSample` is the total captured sample count). |
 | `waver:recorderror` | `{ error: Error }` | Starting or running the built-in mic recording fails (e.g. permission denied). |
 | `waver:loaderror` | `{ error: Error }` | Decoding a file picked via the built-in Load File button fails. |
 | `waver:viewmodechange` | `{ viewMode: ViewMode }` | `setViewMode()` or `configure({ viewMode })` actually changes the view mode. |
 | `waver:spectrogramready` | `{}` | The background spectrogram analysis for the current buffer/resolution resolves (only relevant in `viewMode: "spectrogram"`). |
 | `waver:reset` | `{}` | `reset()` erases loaded/recorded audio and returns to the empty-button state. |
+| `waver:loadsuccess` | `{ durationSample: number; sampleRate: number }` | A file successfully loads via the built-in Load File button. |
+| `waver:recordsuccess` | `{ durationSample: number; sampleRate: number }` | Recording successfully stops and audio is loaded into the component. |
 
 `SelectionEventDetail` shape (used by all three selection events):
 
@@ -429,11 +447,15 @@ Plus:
 | `onLoop` | `(positionSample: number) => void` | Maps to `waver:loop`. |
 | `onRecordStart` | `() => void` | Maps to `waver:recordstart`. |
 | `onRecordStop` | `(positionSample: number) => void` | Maps to `waver:recordstop`. |
+| `onMonitorStart` | `() => void` | Maps to `waver:monitorstart`. |
+| `onMonitorStop` | `() => void` | Maps to `waver:monitorstop`. |
 | `onRecordError` | `(error: Error) => void` | Maps to `waver:recorderror`. |
 | `onLoadError` | `(error: Error) => void` | Maps to `waver:loaderror`. |
 | `onViewModeChange` | `(viewMode: ViewMode) => void` | Maps to `waver:viewmodechange`. |
 | `onSpectrogramReady` | `() => void` | Maps to `waver:spectrogramready`. |
 | `onReset` | `() => void` | Maps to `waver:reset`. |
+| `onLoadSuccess` | `(detail: { durationSample: number; sampleRate: number }) => void` | Maps to `waver:loadsuccess`. |
+| `onRecordSuccess` | `(detail: { durationSample: number; sampleRate: number }) => void` | Maps to `waver:recordsuccess`. |
 
 ### `WaverHandle` (imperative ref)
 
@@ -462,6 +484,8 @@ interface WaverHandle {
   element: () => WaverElement | null;
   getSamples: () => Float32Array;
   getSampleRate: () => number;
+  getChannelCount: () => number;
+  getChannelData: (channelIndex: number) => Float32Array;
 }
 ```
 
@@ -522,12 +546,16 @@ ultimately map to the same `WaverOptions.channelIndex`).
 | `stop` | `positionSample: number` | `waver:stop` |
 | `loop` | `positionSample: number` | `waver:loop` |
 | `recordstart` | — | `waver:recordstart` |
+| `monitorstart` | — | `waver:monitorstart` |
+| `monitorstop` | — | `waver:monitorstop` |
 | `recordstop` | `positionSample: number` | `waver:recordstop` |
 | `recorderror` | `error: Error` | `waver:recorderror` |
 | `loaderror` | `error: Error` | `waver:loaderror` |
 | `viewmodechange` | `viewMode: ViewMode` | `waver:viewmodechange` |
 | `spectrogramready` | — | `waver:spectrogramready` |
 | `reset` | — | `waver:reset` |
+| `loadsuccess` | `durationSample, sampleRate` | `waver:loadsuccess` |
+| `recordsuccess` | `durationSample, sampleRate` | `waver:recordsuccess` |
 
 ### Exposed methods (`ref`/`expose`)
 
@@ -555,6 +583,8 @@ getViewMode: () => ViewMode;
 element: () => WaverElement | null;
 getSamples: () => Float32Array;
 getSampleRate: () => number;
+getChannelCount: () => number;
+getChannelData: (channelIndex: number) => Float32Array;
 ```
 
 Same gaps as the React handle: no `channelIndex` argument on `startRecording`, no `final` argument
@@ -584,6 +614,29 @@ All defined in `src/core/types.ts` unless noted; all are re-exported from the `w
 | `WaverEventMap` | Map of every `waver:*` event name to its detail payload type; used internally for the typed `emit()` helper. |
 | `WaverHandle` (`react`) | React imperative ref surface, defined in `src/react/Waver.tsx`. |
 | `WaverProps` (`react`) | React component props, defined in `src/react/Waver.tsx`. |
+
+---
+
+## Stereo/Multichannel API (advanced)
+
+Stereo and multichannel support is built-in: `loadAudioBuffer()` extracts and stores all channels,
+and the main waveform rendering uses the first channel. For applications that need direct access to
+other channels:
+
+```ts
+function getChannelCount(buffer: AudioBuffer): number
+```
+Returns the channel count (helper from `waver/core/stereo`).
+
+```ts
+function extractChannelData(buffer: AudioBuffer, channelIndex: number): Float32Array
+```
+Extract a specific channel, clamped to `[0, numberOfChannels)` (helper from `waver/core/stereo`).
+
+```ts
+function mixChannelsToMono(buffer: AudioBuffer): Float32Array
+```
+Mix all channels to mono by averaging them (helper from `waver/core/stereo`).
 
 ---
 

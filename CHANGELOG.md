@@ -36,6 +36,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `waver:selectionchanged` / `waver:selectionreset` settled-selection events (core element only —
   not yet forwarded by the React/Vue wrappers), alongside the existing continuous
   `waver:selectionchange`.
+- Stereo and multichannel audio support: `getChannelCount()` / `getChannelData(channelIndex)` for
+  per-channel sample access, stereo recording via `startRecording(stream, channelIndex)`,
+  and stereo waveform rendering with stacked lanes (per-channel visualization).
+- Built-in mic monitoring (Monitor button, live VU meter, `waver:monitorstart` / `waver:monitorstop`
+  events) for level metering without recording.
+- `waver:loadsuccess` and `waver:recordsuccess` events (forwarded as `onLoadSuccess` / `onRecordSuccess`
+  in React and `loadsuccess` / `recordsuccess` in Vue) carrying `{ durationSample, sampleRate }`.
+- `monitorButton` control state for the built-in Monitor button visibility/interactivity.
+- `startMonitoring()` / `stopMonitoring()` / `isMonitoring()` methods and `onMonitorStart` / `onMonitorStop`
+  React props (Vue: `monitorstart` / `monitorstop` emits).
 - Playwright end-to-end suite and CI job.
 
 ## [0.1.0] - Initial development

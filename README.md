@@ -13,8 +13,10 @@ no logic duplication.
 - Minimap with viewport overlay; click/drag to pan
 - Playback via the native Web Audio API, with an optional external-node hook for inserting your own
   effects chain (EQ, convolution, etc.)
-- Built-in mic recording (with waveform/spectrogram view while capturing) alongside file loading
+- Built-in mic recording (with waveform/spectrogram view while capturing), monitoring (live level
+  metering), and file loading
 - Spectrogram view as an alternative to the waveform, computed off the main thread
+- Stereo/multichannel audio support with per-channel sample access
 - Themeable (colors, font, optional Google Font loading, rounded corners)
 
 ## Tech stack
@@ -52,6 +54,13 @@ waver.loadAudioBuffer(audioBuffer, audioContext);
 waver.addEventListener("waver:cursorchange", (e) => {
   console.log("cursor", (e as CustomEvent).detail.positionSample);
 });
+
+// Check multichannel audio
+const channelCount = waver.getChannelCount(); // 1 for mono, 2+ for stereo/multichannel
+if (channelCount > 1) {
+  const leftChannel = waver.getChannelData(0);
+  const rightChannel = waver.getChannelData(1);
+}
 ```
 
 ```html
