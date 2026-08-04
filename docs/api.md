@@ -582,14 +582,13 @@ setViewMode: (mode: ViewMode) => void;
 getViewMode: () => ViewMode;
 element: () => WaverElement | null;
 getSamples: () => Float32Array;
+getChannels: () => Float32Array[];
 getSampleRate: () => number;
-getChannelCount: () => number;
-getChannelData: (channelIndex: number) => Float32Array;
 ```
 
 Same gaps as the React handle: no `channelIndex` argument on `startRecording`, no `final` argument
-on `setSelection`, and no exposed `setChannelIndex`/`getChannelIndex`/`setInputStream`/
-`getInputStream` — use `element()` for any of these.
+on `setSelection`, and no exposed `getChannelCount`/`setChannelIndex`/`getChannelIndex`/
+`setInputStream`/`getInputStream` — use `element()` for any of these.
 
 ---
 

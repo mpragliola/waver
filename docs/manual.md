@@ -172,7 +172,7 @@ Set `recordButton: "disabled"` to grey out (but keep visible) the Record button 
 while one is actively recording — useful when several Waver instances share a single mic and only
 one may record at a time. Stereo/multichannel sources use `channelIndex` (config option or
 `startRecording()`'s second argument) to pick which channel is kept; the loaded audio retains all
-channels and is accessible via `getChannelCount()` / `getChannelData(index)`.
+channels and is accessible via `getChannelCount()` / `getChannels()`.
 
 ---
 

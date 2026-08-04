@@ -36,17 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `waver:selectionchanged` / `waver:selectionreset` settled-selection events (core element only —
   not yet forwarded by the React/Vue wrappers), alongside the existing continuous
   `waver:selectionchange`.
-- Stereo and multichannel audio support: `getChannelCount()` / `getChannelData(channelIndex)` for
+- Stereo and multichannel audio support: `getChannelCount()` / `getChannels()` for
   per-channel sample access, stereo recording via `startRecording(stream, channelIndex)`,
   and stereo waveform rendering with stacked lanes (per-channel visualization).
 - Built-in mic monitoring (Monitor button, live VU meter, `waver:monitorstart` / `waver:monitorstop`
   events) for level metering without recording.
 - `waver:loadsuccess` and `waver:recordsuccess` events (forwarded as `onLoadSuccess` / `onRecordSuccess`
-  in React and `loadsuccess` / `recordsuccess` in Vue) carrying `{ durationSample, sampleRate }`.
+  in React and `loadsuccess` / `recordsuccess` in Vue) carrying `{ durationSample, sampleRate }`
+  (`waver:loadsuccess` additionally carries `fileName`).
 - `monitorButton` control state for the built-in Monitor button visibility/interactivity.
 - `startMonitoring()` / `stopMonitoring()` / `isMonitoring()` methods and `onMonitorStart` / `onMonitorStop`
   React props (Vue: `monitorstart` / `monitorstop` emits).
 - Playwright end-to-end suite and CI job.
+- `getChannels()` method (React/Vue: `getChannels` ref/expose) returning per-channel `Float32Array`
+  sample buffers for the currently loaded audio.
+- `fileName` field on the `waver:loadsuccess` event payload, naming the file picked via the
+  built-in Load File button.
 
 ## [0.1.0] - Initial development
 

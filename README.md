@@ -55,11 +55,14 @@ waver.addEventListener("waver:cursorchange", (e) => {
   console.log("cursor", (e as CustomEvent).detail.positionSample);
 });
 
+waver.addEventListener("waver:loadsuccess", (e) => {
+  console.log("loaded", (e as CustomEvent).detail.fileName);
+});
+
 // Check multichannel audio
 const channelCount = waver.getChannelCount(); // 1 for mono, 2+ for stereo/multichannel
 if (channelCount > 1) {
-  const leftChannel = waver.getChannelData(0);
-  const rightChannel = waver.getChannelData(1);
+  const [leftChannel, rightChannel] = waver.getChannels();
 }
 ```
 
