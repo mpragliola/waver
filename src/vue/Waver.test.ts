@@ -261,6 +261,30 @@ describe("Vue Waver wrapper", () => {
     expect(wrapper.emitted("monitorstop")).toHaveLength(1);
   });
 
+  it("emits loadsuccess when a file is picked via the built-in Load File button", async () => {
+    const wrapper = mount(Waver);
+    await wrapper.vm.$nextTick();
+    const el = exposed(wrapper).element();
+
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return makeFakeAudioContext();
+      })
+    );
+
+    const fileInput = el!.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+    const file = new File([new ArrayBuffer(8)], "test.wav", { type: "audio/wav" });
+    // jsdom's File doesn't implement arrayBuffer(); WaverElement's file-load path calls it directly.
+    (file as unknown as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer = async () => new ArrayBuffer(8);
+    Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+    fileInput.dispatchEvent(new Event("change"));
+
+    await vi.waitFor(() => expect(wrapper.emitted("loadsuccess")).toHaveLength(1));
+    const detail = wrapper.emitted("loadsuccess")![0][0] as { durationSample: number; sampleRate: number };
+    expect(detail.sampleRate).toBeGreaterThan(0);
+  });
+
   it("removes event listeners on unmount (no stale emits)", async () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();
