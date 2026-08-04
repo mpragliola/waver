@@ -56,6 +56,7 @@ describe("React Waver wrapper", () => {
 
     expect(ref.current?.hasAudio()).toBe(false);
     expect(ref.current?.isRecording()).toBe(false);
+    expect(ref.current?.isMonitoring()).toBe(false);
     expect(ref.current?.getZoom()).toEqual({ samplesPerPixel: 1, offsetSample: 0 });
 
     const samples = new Float32Array(1000);
@@ -169,6 +170,75 @@ describe("React Waver wrapper", () => {
     });
 
     expect(onRecordError).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-configures the element when monitorButton prop changes", async () => {
+    const { container, rerender } = render(<Waver monitorButton="enabled" />);
+    const el = container.querySelector("wave-r") as WaverElement;
+    const configureSpy = vi.spyOn(el, "configure");
+
+    rerender(<Waver monitorButton="disabled" />);
+    await act(async () => {});
+
+    expect(configureSpy).toHaveBeenCalledWith(expect.objectContaining({ monitorButton: "disabled" }));
+  });
+
+  it("exposes startMonitoring/stopMonitoring/isMonitoring via the ref", async () => {
+    const ref = createRef<WaverHandle>();
+    render(<Waver ref={ref} />);
+    await act(async () => {});
+
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream),
+      },
+    });
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return makeFakeAudioContext();
+      })
+    );
+
+    await act(async () => {
+      ref.current?.startMonitoring();
+    });
+    expect(ref.current?.isMonitoring()).toBe(true);
+
+    act(() => {
+      ref.current?.stopMonitoring();
+    });
+    expect(ref.current?.isMonitoring()).toBe(false);
+  });
+
+  it("fires onMonitorStart/onMonitorStop from real monitoring lifecycle events", async () => {
+    const onMonitorStart = vi.fn();
+    const onMonitorStop = vi.fn();
+    const ref = createRef<WaverHandle>();
+    render(<Waver ref={ref} onMonitorStart={onMonitorStart} onMonitorStop={onMonitorStop} />);
+    await act(async () => {});
+
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream),
+      },
+    });
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return makeFakeAudioContext();
+      })
+    );
+
+    await act(async () => {
+      ref.current?.startMonitoring();
+    });
+    expect(onMonitorStart).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      ref.current?.stopMonitoring();
+    });
+    expect(onMonitorStop).toHaveBeenCalledTimes(1);
   });
 
   it("stops listening after unmount (no stale event handlers)", async () => {

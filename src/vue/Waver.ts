@@ -27,6 +27,7 @@ export const Waver = defineComponent({
     rulerHeight: { type: Number as PropType<number>, default: undefined },
     loadButton: { type: String as PropType<ControlState>, default: undefined },
     recordButton: { type: String as PropType<ControlState>, default: undefined },
+    monitorButton: { type: String as PropType<ControlState>, default: undefined },
     hideButtonLabels: { type: Boolean as PropType<boolean>, default: undefined },
     cancelButton: { type: String as PropType<ControlState>, default: undefined },
     viewMode: { type: String as PropType<ViewMode>, default: undefined },
@@ -51,6 +52,8 @@ export const Waver = defineComponent({
     recordstart: () => true,
     recordstop: (_positionSample: number) => true,
     recorderror: (_error: Error) => true,
+    monitorstart: () => true,
+    monitorstop: () => true,
     loaderror: (_error: Error) => true,
     viewmodechange: (_viewMode: ViewMode) => true,
     spectrogramready: () => true,
@@ -69,6 +72,8 @@ export const Waver = defineComponent({
       ["waver:recordstart", (() => emit("recordstart")) as EventListener],
       ["waver:recordstop", ((e: CustomEvent) => emit("recordstop", e.detail.positionSample)) as EventListener],
       ["waver:recorderror", ((e: CustomEvent) => emit("recorderror", e.detail.error)) as EventListener],
+      ["waver:monitorstart", (() => emit("monitorstart")) as EventListener],
+      ["waver:monitorstop", (() => emit("monitorstop")) as EventListener],
       ["waver:loaderror", ((e: CustomEvent) => emit("loaderror", e.detail.error)) as EventListener],
       ["waver:viewmodechange", ((e: CustomEvent) => emit("viewmodechange", e.detail.viewMode)) as EventListener],
       ["waver:spectrogramready", (() => emit("spectrogramready")) as EventListener],
@@ -102,6 +107,7 @@ export const Waver = defineComponent({
       if (props.rulerHeight !== undefined) opts.rulerHeight = props.rulerHeight;
       if (props.loadButton !== undefined) opts.loadButton = props.loadButton;
       if (props.recordButton !== undefined) opts.recordButton = props.recordButton;
+      if (props.monitorButton !== undefined) opts.monitorButton = props.monitorButton;
       if (props.hideButtonLabels !== undefined) opts.hideButtonLabels = props.hideButtonLabels;
       if (props.cancelButton !== undefined) opts.cancelButton = props.cancelButton;
       if (props.viewMode !== undefined) opts.viewMode = props.viewMode;
@@ -134,9 +140,12 @@ export const Waver = defineComponent({
       togglePlayback: () => elRef.value?.togglePlayback(),
       startRecording: (stream?: MediaStream) => elRef.value?.startRecording(stream),
       stopRecording: () => elRef.value?.stopRecording(),
+      startMonitoring: (stream?: MediaStream) => elRef.value?.startMonitoring(stream),
+      stopMonitoring: () => elRef.value?.stopMonitoring(),
       reset: () => elRef.value?.reset(),
       hasAudio: () => elRef.value?.hasAudio() ?? false,
       isRecording: () => elRef.value?.isRecording() ?? false,
+      isMonitoring: () => elRef.value?.isMonitoring() ?? false,
       setZoom: (zoom: Partial<ZoomState>, animate?: boolean) => elRef.value?.setZoom(zoom, animate),
       zoomToFull: () => elRef.value?.zoomToFull(),
       setSelection: (selection: SelectionRange | null) => elRef.value?.setSelection(selection),

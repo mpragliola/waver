@@ -20,8 +20,11 @@ type WaverVueExposed = {
   togglePlayback: () => void;
   startRecording: () => void;
   stopRecording: () => void;
+  startMonitoring: () => void;
+  stopMonitoring: () => void;
   hasAudio: () => boolean;
   isRecording: () => boolean;
+  isMonitoring: () => boolean;
   setZoom: (zoom: Partial<ZoomState>, animate?: boolean) => void;
   zoomToFull: () => void;
   setSelection: (selection: SelectionRange | null) => void;
@@ -120,6 +123,7 @@ describe("Vue Waver wrapper", () => {
 
     expect(exposed(wrapper).hasAudio()).toBe(false);
     expect(exposed(wrapper).isRecording()).toBe(false);
+    expect(exposed(wrapper).isMonitoring()).toBe(false);
     expect(exposed(wrapper).getZoom()).toEqual({ samplesPerPixel: 1, offsetSample: 0 });
 
     exposed(wrapper).loadSamples(new Float32Array(1000), 44100);
@@ -198,6 +202,63 @@ describe("Vue Waver wrapper", () => {
     await exposed(wrapper).startRecording();
 
     expect(wrapper.emitted("recorderror")).toHaveLength(1);
+  });
+
+  it("re-configures monitorButton reactively when the prop changes", async () => {
+    const wrapper = mount(Waver, { props: { monitorButton: "enabled" as const } });
+    const el = wrapper.find("wave-r").element as WaverElement;
+    const configureSpy = vi.spyOn(el, "configure");
+
+    await wrapper.setProps({ monitorButton: "disabled" });
+    await wrapper.vm.$nextTick();
+
+    expect(configureSpy).toHaveBeenCalledWith(expect.objectContaining({ monitorButton: "disabled" }));
+  });
+
+  it("exposes startMonitoring/stopMonitoring/isMonitoring", async () => {
+    const wrapper = mount(Waver);
+    await wrapper.vm.$nextTick();
+
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream),
+      },
+    });
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return makeFakeAudioContext();
+      })
+    );
+
+    await exposed(wrapper).startMonitoring();
+    expect(exposed(wrapper).isMonitoring()).toBe(true);
+
+    exposed(wrapper).stopMonitoring();
+    expect(exposed(wrapper).isMonitoring()).toBe(false);
+  });
+
+  it("emits monitorstart/monitorstop", async () => {
+    const wrapper = mount(Waver);
+    await wrapper.vm.$nextTick();
+
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] }) as unknown as MediaStream),
+      },
+    });
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return makeFakeAudioContext();
+      })
+    );
+
+    await exposed(wrapper).startMonitoring();
+    expect(wrapper.emitted("monitorstart")).toHaveLength(1);
+
+    exposed(wrapper).stopMonitoring();
+    expect(wrapper.emitted("monitorstop")).toHaveLength(1);
   });
 
   it("removes event listeners on unmount (no stale emits)", async () => {

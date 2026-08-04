@@ -14,9 +14,12 @@ export interface WaverHandle {
   togglePlayback: () => void;
   startRecording: (stream?: MediaStream) => void;
   stopRecording: () => void;
+  startMonitoring: (stream?: MediaStream) => void;
+  stopMonitoring: () => void;
   reset: () => void;
   hasAudio: () => boolean;
   isRecording: () => boolean;
+  isMonitoring: () => boolean;
   setZoom: (zoom: Partial<ZoomState>, animate?: boolean) => void;
   zoomToFull: () => void;
   setSelection: (selection: SelectionRange | null) => void;
@@ -47,6 +50,8 @@ export interface WaverProps extends Partial<WaverOptions> {
   onRecordStart?: () => void;
   onRecordStop?: (positionSample: number) => void;
   onRecordError?: (error: Error) => void;
+  onMonitorStart?: () => void;
+  onMonitorStop?: () => void;
   onLoadError?: (error: Error) => void;
   onViewModeChange?: (viewMode: ViewMode) => void;
   onSpectrogramReady?: () => void;
@@ -68,6 +73,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onRecordStart,
     onRecordStop,
     onRecordError,
+    onMonitorStart,
+    onMonitorStop,
     onLoadError,
     onViewModeChange,
     onSpectrogramReady,
@@ -87,9 +94,12 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       togglePlayback: () => elRef.current?.togglePlayback(),
       startRecording: (stream) => void elRef.current?.startRecording(stream),
       stopRecording: () => elRef.current?.stopRecording(),
+      startMonitoring: (stream) => void elRef.current?.startMonitoring(stream),
+      stopMonitoring: () => elRef.current?.stopMonitoring(),
       reset: () => elRef.current?.reset(),
       hasAudio: () => elRef.current?.hasAudio() ?? false,
       isRecording: () => elRef.current?.isRecording() ?? false,
+      isMonitoring: () => elRef.current?.isMonitoring() ?? false,
       setZoom: (z, animate) => elRef.current?.setZoom(z, animate),
       zoomToFull: () => elRef.current?.zoomToFull(),
       setSelection: (s) => elRef.current?.setSelection(s),
@@ -129,6 +139,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       ["waver:recordstart", (() => onRecordStart?.()) as EventListener],
       ["waver:recordstop", ((e: CustomEvent) => onRecordStop?.(e.detail.positionSample)) as EventListener],
       ["waver:recorderror", ((e: CustomEvent) => onRecordError?.(e.detail.error)) as EventListener],
+      ["waver:monitorstart", (() => onMonitorStart?.()) as EventListener],
+      ["waver:monitorstop", (() => onMonitorStop?.()) as EventListener],
       ["waver:loaderror", ((e: CustomEvent) => onLoadError?.(e.detail.error)) as EventListener],
       ["waver:viewmodechange", ((e: CustomEvent) => onViewModeChange?.(e.detail.viewMode)) as EventListener],
       ["waver:spectrogramready", (() => onSpectrogramReady?.()) as EventListener],
@@ -146,6 +158,8 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onRecordStart,
     onRecordStop,
     onRecordError,
+    onMonitorStart,
+    onMonitorStop,
     onLoadError,
     onViewModeChange,
     onSpectrogramReady,
