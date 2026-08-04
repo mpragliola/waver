@@ -1390,6 +1390,151 @@ git commit -m "feat: replace RecordingPanel with a trimmed device/channel picker
 
 ---
 
+### Task 9.5: Make waver's empty-state Record button reachable on a fresh, empty slot
+
+**Why this task exists:** discovered during Task 10 — not in the original plan. The whole point
+of this migration is that waver's own empty-overlay (Load File + Record buttons, shown when
+`hasAudio()` is false) becomes the recording UI. But `AudioSlot.vue`/`ReferenceSlot.vue` still wrap
+`WaveformEditor` in a visibility gate (`v-show="active"`, `active = hasAudio && !loading`) inherited
+from the old bespoke-RecordingPanel era, when some other component supplied the Record affordance
+outside that gate. Net effect: on a fresh page, `WaveformEditor`'s entire host — including waver's
+now-embedded Record button — is `display:none` until audio already exists. You cannot start a first
+recording via the UI. The reference slot has a second, worse version of the same problem: its
+`WaveformEditor` doesn't even mount (`v-if="activeTarget"`) until a reference tab already exists,
+and no reference tab can be created without first loading a file (the only "+' entry points require
+an existing reference to clone/add alongside). Fix both so waver's own empty-overlay is reachable
+from a completely fresh app state, on both Wave 1 and a reference tab.
+
+**Files:**
+- Modify: `src/components/upload/AudioSlot.vue`
+- Modify: `src/components/upload/ReferenceSlot.vue`
+- Modify: `src/components/upload/WaveformEditor.vue`
+
+**Interfaces:**
+- Consumes: waver's existing `load-button`/`record-button` `ControlState` props (already wired,
+  Task 5/8), `store.addEmptyReference(): string` (existing store action, already used by
+  `ReferenceTabBar`'s "+" and `ReferenceSlot.vue`'s own clone/add buttons).
+- Produces: no new exported interfaces — this is a visibility/wiring fix within existing components.
+
+- [ ] **Step 1: Widen `AudioSlot.vue` so `WaveformEditor` (and waver's own empty-overlay) is always shown**
+
+In `src/components/upload/AudioSlot.vue`:
+1. Change `showWaveform` from `computed(() => hasAudio.value && !loading.value)` to
+   `computed(() => !loading.value)` — the loading spinner still gates it (a file is actively being
+   parsed), but the presence of audio no longer does.
+2. Remove the standalone `v-else-if="!hasAudio"` empty-state block (the `<div class="empty-state">`
+   containing Tomas's own "Load File" `<button>`, lines ~41-48 as of this task) — it's now fully
+   redundant with waver's own empty-overlay, which offers both Load and Record. Deleting it also
+   removes the now-unused `input?.click()` trigger from that specific button (the `<input
+   ref="input" type="file">` itself stays, since drag-and-drop and any other trigger of it — see
+   Step 3 — may still need it).
+3. Confirm `WaveformEditor`'s `<Waver>` no longer needs `load-button="hidden"` (set in Task 5) —
+   flip it to `load-button="enabled"` so waver's own Load button is what the user sees and clicks
+   in the empty state (see Step 3 for wiring it to the same file-picker flow the deleted button
+   used).
+
+- [ ] **Step 2: Same widening in `ReferenceSlot.vue`, plus fixing the zero-reference chicken-and-egg**
+
+In `src/components/upload/ReferenceSlot.vue`:
+1. Change `showWaveform` from
+   `computed(() => hasAnyReference.value && !loading.value && !activeIsEmpty.value)` to
+   `computed(() => !loading.value)` — same reasoning as Step 1.
+2. Change `WaveformEditor`'s `v-if="activeTarget"` — currently the component doesn't mount at all
+   when there's no reference yet. Since `WaveformEditor` needs a concrete `WaveformTarget` prop
+   (`'A' | { referenceId: string }`), and there is no reference tab to point it at in the
+   zero-reference case, the cleanest fix is: when `!hasAnyReference`, eagerly call
+   `store.addEmptyReference()` once (e.g. in `onMounted`, or as an immediate `watch` on
+   `hasAnyReference` that fires only when it's false and no call has been made yet) so a reference
+   tab — and therefore a valid `activeTarget` — always exists by the time the component is
+   interactive. This mirrors what `ReferenceTabBar`'s "+" already does, just triggered
+   automatically instead of by a click that's currently unreachable from zero tabs.
+   - Do NOT auto-create a reference on every mount if one already exists (check
+     `store.referenceOrder.length === 0` before calling `addEmptyReference()`), and do not create
+     more than one — this is meant to seed exactly the same lazy "empty tab" state a manual "+"
+     click already produces, not a new kind of state.
+3. Remove the two now-redundant `<div class="empty-state">` blocks with Tomas's own "Load File"
+   buttons (the `activeIsEmpty` one and the `!hasAnyReference` one) — both are superseded by
+   waver's own empty-overlay once Step 2's auto-seed guarantees `activeTarget` is always valid and
+   `WaveformEditor` is always visible per Step 2.1. Since the zero-reference case is now
+   eliminated by the auto-seed, the `!hasAnyReference` branch becomes dead — but leave the
+   `v-if="activeTarget"` guard itself in place defensively (it should now always be true once
+   mounted, but this is cheap insurance against a race between the auto-seed watch/mount hook and
+   first render).
+4. Flip `load-button="hidden"` to `load-button="enabled"` on this file's `<Waver>` too (see Step 3).
+
+- [ ] **Step 3: Wire waver's own Load button to the existing file-picker flow**
+
+Both files currently trigger their (now-deleted) "Load File" button via `input?.click()` on a
+hidden `<input type="file">`. Once waver's own Load button replaces it (`load-button="enabled"`),
+that button opens waver's OWN internal file input and decodes the file itself via
+`loadAudioBuffer`/`waver:loaderror` — which bypasses `useAudioFileLoader`/`useReferenceFileLoader`
+(this app's own parsing, which produces the deinterleaved `channels` array that `AudioBuffer`/
+`AudioAsset` need — see `src/types/audio.ts`). Using waver's Load button as-is would load audio
+into waver's *own* internal state without ever populating the store correctly.
+
+Two ways to reconcile this — pick whichever is more consistent with how `WaveformEditor.vue`
+already relates to waver's `loadSamples`/audio pipeline (read `useWaveformSlot.ts`'s `load()`
+function first to see the existing pattern before deciding):
+- Keep waver's Load button `hidden` after all (revert Steps 1.3/2.4) and instead make Tomas's own
+  "Load File" trigger (the hidden `<input>` + its `.click()`) reachable from the SAME empty-overlay
+  visual position waver renders — e.g. render Tomas's own button only alongside/instead of waver's,
+  positioned to look native — OR
+  - Listen for waver's `@loaderror`/successful-load path and intercept/redirect it into the
+    existing `useAudioFileLoader`/`useReferenceFileLoader` flow instead of letting waver decode
+    the file itself.
+
+Whichever approach: the end state must be that clicking "Load File" in the now-always-visible empty
+state results in the SAME store population (`audioBufferA`/`channelBufferA`/`audioHeaderA` for A,
+or a new `AudioAsset` for a reference) that drag-and-drop and the old deleted button already
+produced — verify this by testing a file load end-to-end (Step 5), not just that a button click
+does something.
+
+**Record must use waver's own button** (`record-button="enabled"`, from Task 5/8) — that part
+already works correctly per Tasks 8/9's wiring; this step is only about reconciling the Load path.
+
+- [ ] **Step 4: Typecheck**
+
+Run: `cd /home/marco/dev/tomas && npx vue-tsc --noEmit`
+Expected: no new errors beyond the pre-existing baseline (confirm the exact baseline count by
+running on the commit before this task's changes, same technique used in every prior task).
+
+- [ ] **Step 5: Manual verification**
+
+Run: `cd /home/marco/dev/tomas && npm run dev`
+1. On a completely fresh page load (clear any localStorage/reload), confirm Wave 1 shows waver's
+   own empty-overlay (Load File + Record buttons) immediately — no audio needed first.
+2. Click waver's Load File button, pick a file, confirm it loads correctly (waveform renders,
+   spectrum computes) — verifying Step 3's reconciliation actually works, not just that a button
+   exists.
+3. Reload fresh again, click waver's Record button on Wave 1, record briefly, click Stop, confirm
+   the waveform populates and spectrum updates (this is the scenario Task 10's e2e test needs to
+   pass).
+4. Reload fresh, confirm the reference slot ALSO shows waver's own empty-overlay immediately (no
+   "load a file first" chicken-and-egg) — confirming Step 2's auto-seed worked.
+5. Click Record on the reference slot's empty-overlay, record briefly, click Stop, confirm a
+   reference tab now exists with the recorded audio.
+6. Confirm drag-and-drop onto the upload area still works for both slots (Step 1/3 must not have
+   broken the existing drop-zone behavior, which lives on the outer `.upload-area` div, not inside
+   `WaveformEditor`).
+
+- [ ] **Step 6: Run the existing unit/component test suite**
+
+Run: `cd /home/marco/dev/tomas && npx vitest run`
+Expected: PASS — no unit test should depend on `showWaveform`'s old gating logic or the deleted
+empty-state buttons' specific markup (spot-check `tests/unit/` for any that do, and update them if
+so; the plan's earlier tasks didn't add such tests, but a pre-existing test might).
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd /home/marco/dev/tomas
+git add src/components/upload/AudioSlot.vue src/components/upload/ReferenceSlot.vue \
+        src/components/upload/WaveformEditor.vue
+git commit -m "fix: make waver's empty-state Load/Record buttons reachable from a fresh, empty slot"
+```
+
+---
+
 ### Task 10: Rewrite the recording Playwright spec
 
 **Files:**
