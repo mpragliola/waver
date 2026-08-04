@@ -24,12 +24,36 @@
 
     #controls {
       display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 0.5rem;
       margin-top: 1rem;
     }
 
-    button {
+    #controls button,
+    #controls select {
       font-family: inherit;
+      font-size: 0.85rem;
+      color: #e2e8f0;
+      background: #1a1d24;
+      border: 1px solid #333a47;
+      border-radius: 6px;
+      padding: 0.4rem 0.7rem;
+      cursor: pointer;
+    }
+
+    #controls button:hover,
+    #controls select:hover {
+      background: #23272f;
+      border-color: #454e5e;
+    }
+
+    #controls label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #9aa4b2;
+      font-size: 0.85rem;
     }
 
     #status {
