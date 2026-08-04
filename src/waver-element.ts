@@ -643,6 +643,9 @@ export class WaverElement extends HTMLElement {
     this.fileInput.value = "";
     if (!file) return;
 
+    if (this.rejectFile(file)) return;
+    if (!this.dispatchBeforeLoad(file)) return;
+
     try {
       const context = this.ensureInternalAudioContext();
       const arrayBuffer = await file.arrayBuffer();
@@ -806,9 +809,31 @@ export class WaverElement extends HTMLElement {
       const files = e.dataTransfer?.files;
       if (!files || files.length === 0) return;
       const file = files[0];
-      if (!file.type.startsWith("audio/")) return;
+      if (this.rejectFile(file)) return;
+      if (!this.opts.validateFile && !file.type.startsWith("audio/")) return;
+      if (!this.dispatchBeforeLoad(file)) return;
       void this.handleDrop(file);
     });
+  }
+
+  /** Runs the host-supplied `validateFile` hook, if any, and emits `waver:loaderror` on rejection. */
+  private rejectFile(file: File): boolean {
+    const message = this.opts.validateFile?.(file) ?? null;
+    if (message === null) return false;
+    this.emit("waver:loaderror", { error: new Error(message) });
+    return true;
+  }
+
+  /** Dispatches the cancelable `waver:beforeload` event. Returns false (no loaderror follow-up) if canceled. */
+  private dispatchBeforeLoad(file: File): boolean {
+    const event = new CustomEvent("waver:beforeload", {
+      detail: { file },
+      bubbles: true,
+      composed: true,
+      cancelable: true,
+    });
+    this.dispatchEvent(event);
+    return !event.defaultPrevented;
   }
 
   private async handleDrop(file: File): Promise<void> {

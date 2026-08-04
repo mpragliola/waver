@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pre-decode file validation for the built-in Load File button and drag-drop: a `validateFile`
+  option (`(file: File) => string | null`) to reject a file with a custom message before decoding
+  (surfaced via `waver:loaderror`), and a cancelable `waver:beforeload` event
+  (`{ file: File }`, call `preventDefault()` to skip the load) — plus `onBeforeLoad` (React) and
+  `beforeLoad` (Vue) wrapper props. Both run ahead of the built-in `audio/*` MIME filter and the
+  overwrite-confirmation dialog.
 - Touch support: two-finger pinch to zoom, two-finger swipe to pan.
 - `recordViewMode` option (`"flat"` / `"zoom-out"` / `"scroll"`) and `recordWindowSeconds` option
   controlling the viewport while recording.

@@ -59,6 +59,8 @@ export interface WaverProps extends Partial<WaverOptions> {
   onReset?: () => void;
   onLoadSuccess?: (detail: { durationSample: number; sampleRate: number; fileName: string }) => void;
   onRecordSuccess?: (detail: { durationSample: number; sampleRate: number }) => void;
+  /** Maps to `waver:beforeload`. Return `false` to cancel the load (no `waver:loaderror` follows). */
+  onBeforeLoad?: (file: File) => boolean | void;
 }
 
 /** React wrapper around the `<wave-r>` custom element. Configure/load data imperatively via the ref. */
@@ -84,6 +86,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onReset,
     onLoadSuccess,
     onRecordSuccess,
+    onBeforeLoad,
     ...options
   } = props;
   const elRef = useRef<WaverElement | null>(null);
@@ -125,7 +128,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
   useEffect(() => {
     elRef.current?.configure(options);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(options)]);
+  }, [JSON.stringify(options), options.validateFile]);
 
   useEffect(() => {
     elRef.current?.setInputStream(inputStream ?? null);
@@ -153,6 +156,12 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
       ["waver:reset", (() => onReset?.()) as EventListener],
       ["waver:loadsuccess", ((e: CustomEvent) => onLoadSuccess?.(e.detail)) as EventListener],
       ["waver:recordsuccess", ((e: CustomEvent) => onRecordSuccess?.(e.detail)) as EventListener],
+      [
+        "waver:beforeload",
+        ((e: CustomEvent<{ file: File }>) => {
+          if (onBeforeLoad?.(e.detail.file) === false) e.preventDefault();
+        }) as EventListener,
+      ],
     ];
     handlers.forEach(([type, handler]) => el.addEventListener(type, handler));
     return () => handlers.forEach(([type, handler]) => el.removeEventListener(type, handler));
@@ -174,6 +183,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
     onReset,
     onLoadSuccess,
     onRecordSuccess,
+    onBeforeLoad,
   ]);
 
   return <wave-r ref={elRef as never} class={className as never} style={style as never} />;

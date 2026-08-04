@@ -41,6 +41,9 @@ export const Waver = defineComponent({
      * never picks an input device on its own. */
     inputStream: { type: Object as PropType<MediaStream | null>, default: undefined },
     channelIndex: { type: Number as PropType<number>, default: undefined },
+    validateFile: { type: Function as PropType<WaverOptions["validateFile"]>, default: undefined },
+    /** Maps to `waver:beforeload`. Return `false` to cancel the load (no `waver:loaderror` follows). */
+    beforeLoad: { type: Function as PropType<(file: File) => boolean | void>, default: undefined },
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
@@ -82,6 +85,12 @@ export const Waver = defineComponent({
       ["waver:viewmodechange", ((e: CustomEvent) => emit("viewmodechange", e.detail.viewMode)) as EventListener],
       ["waver:spectrogramready", (() => emit("spectrogramready")) as EventListener],
       ["waver:reset", (() => emit("reset")) as EventListener],
+      [
+        "waver:beforeload",
+        ((e: CustomEvent<{ file: File }>) => {
+          if (props.beforeLoad?.(e.detail.file) === false) e.preventDefault();
+        }) as EventListener,
+      ],
     ];
 
     onMounted(() => {
@@ -121,6 +130,7 @@ export const Waver = defineComponent({
       if (props.spectrogramHop !== undefined) opts.spectrogramHop = props.spectrogramHop;
       if (props.spectrogramFreqBins !== undefined) opts.spectrogramFreqBins = props.spectrogramFreqBins;
       if (props.channelIndex !== undefined) opts.channelIndex = props.channelIndex;
+      if (props.validateFile !== undefined) opts.validateFile = props.validateFile;
       return opts;
     }
 

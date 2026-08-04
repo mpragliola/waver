@@ -290,6 +290,53 @@ describe("Vue Waver wrapper", () => {
     expect(detail.fileName).toBe("test.wav");
   });
 
+  it("beforeLoad prop is called with the file, and its return value controls preventDefault()", async () => {
+    const wrapper = mount(Waver, { props: { beforeLoad: vi.fn(() => undefined) } });
+    await wrapper.vm.$nextTick();
+    const el = exposed(wrapper).element();
+
+    const file = new File([new ArrayBuffer(8)], "test.wav", { type: "audio/wav" });
+    const event = new CustomEvent("waver:beforeload", { detail: { file }, cancelable: true });
+    el!.dispatchEvent(event);
+
+    expect(wrapper.props("beforeLoad")).toHaveBeenCalledWith(file);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("beforeLoad returning false cancels the load via preventDefault()", async () => {
+    const wrapper = mount(Waver, { props: { beforeLoad: () => false } });
+    await wrapper.vm.$nextTick();
+    const el = exposed(wrapper).element();
+
+    const file = new File([new ArrayBuffer(8)], "test.wav", { type: "audio/wav" });
+    const event = new CustomEvent("waver:beforeload", { detail: { file }, cancelable: true });
+    el!.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("validateFile prop reaches configure() and can reject a picked file", async () => {
+    const wrapper = mount(Waver, { props: { validateFile: (f: File) => (f.name.endsWith(".wav") ? null : "bad ext") } });
+    await wrapper.vm.$nextTick();
+    const el = exposed(wrapper).element();
+
+    vi.stubGlobal(
+      "AudioContext",
+      vi.fn(function () {
+        return makeFakeAudioContext();
+      })
+    );
+
+    const fileInput = el!.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+    const file = new File([new ArrayBuffer(8)], "test.mp3", { type: "audio/mpeg" });
+    (file as unknown as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer = async () => new ArrayBuffer(8);
+    Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+    fileInput.dispatchEvent(new Event("change"));
+
+    await vi.waitFor(() => expect(wrapper.emitted("loaderror")).toHaveLength(1));
+    expect((wrapper.emitted("loaderror")![0][0] as Error).message).toBe("bad ext");
+  });
+
   it("removes event listeners on unmount (no stale emits)", async () => {
     const wrapper = mount(Waver);
     await wrapper.vm.$nextTick();

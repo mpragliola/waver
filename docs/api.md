@@ -75,6 +75,7 @@ Passed to `configure()` (core) or as props (React/Vue). All fields are optional 
 | `spectrogramFftSize` | `number` | `2048` | STFT window size in samples, must be a power of two. Larger = finer frequency resolution, coarser time resolution. |
 | `spectrogramHop` | `number` | `512` | STFT hop size in samples (step between windows). Smaller = finer time resolution, more compute. |
 | `spectrogramFreqBins` | `number` | `128` | Number of log-scaled frequency rows the spectrogram is bucketed down to for display. |
+| `validateFile` | `(file: File) => string \| null` | `undefined` | Runs before decoding any file picked via the built-in Load File button or dropped onto the component. Return a string to reject with that message (surfaced via `waver:loaderror`); return `null` to accept. Runs ahead of the built-in `audio/*` MIME filter and the overwrite-confirmation dialog, so it can also be used to accept non-`audio/*` files. |
 
 ---
 
@@ -388,7 +389,8 @@ below; `detail` is the payload shape shown.
 | `waver:monitorstop` | `{}` | Monitoring stops, via the Monitor button, an exit path (reset/Load File/Escape), or a handoff into `startRecording()`. |
 | `waver:recordstop` | `{ positionSample: number }` | Recording stops, whether or not a file load follows (`positionSample` is the total captured sample count). |
 | `waver:recorderror` | `{ error: Error }` | Starting or running the built-in mic recording fails (e.g. permission denied). |
-| `waver:loaderror` | `{ error: Error }` | Decoding a file picked via the built-in Load File button fails. |
+| `waver:loaderror` | `{ error: Error }` | Decoding a file picked via the built-in Load File button fails, or `validateFile` rejects the file. |
+| `waver:beforeload` | `{ file: File }` | Fires before decoding a file picked via the built-in Load File button or dropped onto the component — after `validateFile` (if any) has already accepted it. **Cancelable**: call `preventDefault()` to skip the load (no `waver:loaderror` follows). Fires ahead of the built-in `audio/*` MIME filter and the overwrite-confirmation dialog. |
 | `waver:viewmodechange` | `{ viewMode: ViewMode }` | `setViewMode()` or `configure({ viewMode })` actually changes the view mode. |
 | `waver:spectrogramready` | `{}` | The background spectrogram analysis for the current buffer/resolution resolves (only relevant in `viewMode: "spectrogram"`). |
 | `waver:reset` | `{}` | `reset()` erases loaded/recorded audio and returns to the empty-button state. |
@@ -456,6 +458,7 @@ Plus:
 | `onReset` | `() => void` | Maps to `waver:reset`. |
 | `onLoadSuccess` | `(detail: { durationSample: number; sampleRate: number; fileName: string }) => void` | Maps to `waver:loadsuccess`. |
 | `onRecordSuccess` | `(detail: { durationSample: number; sampleRate: number }) => void` | Maps to `waver:recordsuccess`. |
+| `onBeforeLoad` | `(file: File) => boolean \| void` | Maps to `waver:beforeload`. Return `false` to cancel the load (calls `preventDefault()` on the underlying event; no `waver:loaderror` follows). |
 
 ### `WaverHandle` (imperative ref)
 
@@ -531,6 +534,7 @@ Plus:
 | Prop | Type | Description |
 |---|---|---|
 | `inputStream` | `MediaStream \| null \| undefined` | Watched separately and forwarded to `setInputStream()`. Stream `startRecording()` uses with no explicit argument, including via the built-in Record button. |
+| `beforeLoad` | `(file: File) => boolean \| void` | Maps to `waver:beforeload`. Return `false` to cancel the load (calls `preventDefault()` on the underlying event; no `loaderror` follows). A prop, not an `emit`, because Vue emits have no return-value channel to signal cancellation. |
 
 Note: unlike the React wrapper, `channelIndex` is declared as its own explicit prop here (both
 ultimately map to the same `WaverOptions.channelIndex`).

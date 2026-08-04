@@ -632,6 +632,182 @@ describe("WaverElement", () => {
       const detail = onError.mock.calls[0][0].detail;
       expect(detail.error.message).toBe("bad file");
     });
+
+    function makeFile(name: string, type: string): File {
+      const file = new File([new ArrayBuffer(8)], name, { type });
+      // jsdom's File doesn't implement arrayBuffer(); WaverElement's file-load path calls it directly.
+      (file as unknown as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer = async () => new ArrayBuffer(8);
+      return file;
+    }
+
+    it("validateFile rejects a picked file before decoding, via loaderror", async () => {
+      const el = mount();
+      const decodeAudioData = vi.fn();
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return { ...makeFakeAudioContext(), decodeAudioData };
+        })
+      );
+      el.configure({ validateFile: (file) => (file.size > 4 ? "too big" : null) });
+
+      const onError = vi.fn();
+      el.addEventListener("waver:loaderror", onError);
+
+      const fileInput = el.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+      const file = makeFile("test.wav", "audio/wav");
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+      expect(onError.mock.calls[0][0].detail.error.message).toBe("too big");
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    it("validateFile returning null lets the picked file proceed to decode", async () => {
+      const el = mount();
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+      const validateFile = vi.fn(() => null);
+      el.configure({ validateFile });
+
+      const onSuccess = vi.fn();
+      el.addEventListener("waver:loadsuccess", onSuccess);
+
+      const fileInput = el.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+      const file = makeFile("test.wav", "audio/wav");
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+      expect(validateFile).toHaveBeenCalledWith(file);
+    });
+
+    function dispatchDrop(el: WaverElement, file: File): void {
+      const container = el.shadowRoot!.querySelector(".waver-container") as HTMLElement;
+      const dropEvent = new Event("drop", { cancelable: true }) as Event & { dataTransfer: unknown };
+      Object.defineProperty(dropEvent, "dataTransfer", { value: { files: [file] } });
+      container.dispatchEvent(dropEvent);
+    }
+
+    it("validateFile rejects a dropped file before the built-in audio/* filter runs", async () => {
+      const el = mount();
+      const decodeAudioData = vi.fn();
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return { ...makeFakeAudioContext(), decodeAudioData };
+        })
+      );
+      el.configure({ validateFile: () => "rejected" });
+
+      const onError = vi.fn();
+      el.addEventListener("waver:loaderror", onError);
+
+      // Not audio/* — would already be silently dropped by the built-in filter; validateFile
+      // must still run first and produce a clean rejection message.
+      dispatchDrop(el, makeFile("test.txt", "text/plain"));
+
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+      expect(onError.mock.calls[0][0].detail.error.message).toBe("rejected");
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    it("validateFile can accept a non-audio/* dropped file, overriding the built-in MIME filter", async () => {
+      const el = mount();
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+      el.configure({ validateFile: () => null });
+
+      const onSuccess = vi.fn();
+      el.addEventListener("waver:loadsuccess", onSuccess);
+
+      dispatchDrop(el, makeFile("test.bin", "application/octet-stream"));
+
+      await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    });
+
+    it("waver:beforeload fires with the picked file before decode, and proceeds if not canceled", async () => {
+      const el = mount();
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+
+      const onBeforeLoad = vi.fn();
+      el.addEventListener("waver:beforeload", onBeforeLoad);
+      const onSuccess = vi.fn();
+      el.addEventListener("waver:loadsuccess", onSuccess);
+
+      const fileInput = el.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+      const file = makeFile("test.wav", "audio/wav");
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+      expect(onBeforeLoad).toHaveBeenCalledTimes(1);
+      expect(onBeforeLoad.mock.calls[0][0].detail.file).toBe(file);
+    });
+
+    it("preventDefault() on waver:beforeload cancels the picked-file load with no loaderror", async () => {
+      const el = mount();
+      const decodeAudioData = vi.fn();
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return { ...makeFakeAudioContext(), decodeAudioData };
+        })
+      );
+      el.addEventListener("waver:beforeload", (e) => e.preventDefault());
+      const onError = vi.fn();
+      el.addEventListener("waver:loaderror", onError);
+
+      const fileInput = el.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+      const file = makeFile("test.wav", "audio/wav");
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(decodeAudioData).not.toHaveBeenCalled());
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("preventDefault() on waver:beforeload cancels a dropped-file load", async () => {
+      const el = mount();
+      const decodeAudioData = vi.fn();
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return { ...makeFakeAudioContext(), decodeAudioData };
+        })
+      );
+      el.addEventListener("waver:beforeload", (e) => e.preventDefault());
+
+      dispatchDrop(el, makeFile("test.wav", "audio/wav"));
+
+      await new Promise((r) => setTimeout(r, 0));
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    it("validateFile rejection short-circuits before waver:beforeload is even dispatched", async () => {
+      const el = mount();
+      vi.stubGlobal("AudioContext", vi.fn(function () {
+        return makeFakeAudioContext();
+      }));
+      el.configure({ validateFile: () => "nope" });
+      const onBeforeLoad = vi.fn();
+      el.addEventListener("waver:beforeload", onBeforeLoad);
+      const onError = vi.fn();
+      el.addEventListener("waver:loaderror", onError);
+
+      const fileInput = el.shadowRoot!.querySelector(".waver-file-input") as HTMLInputElement;
+      const file = makeFile("test.wav", "audio/wav");
+      Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+      fileInput.dispatchEvent(new Event("change"));
+
+      await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+      expect(onBeforeLoad).not.toHaveBeenCalled();
+    });
   });
 
   describe("channelIndex", () => {
