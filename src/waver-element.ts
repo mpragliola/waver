@@ -74,6 +74,7 @@ export class WaverElement extends HTMLElement {
   private minimapCtx: CanvasRenderingContext2D | null = null;
 
   private samples: Float32Array = new Float32Array(0);
+  private channelSamples: Float32Array[] = [];
   private sampleRate = 44100;
   private zoom: ZoomState = { samplesPerPixel: 1, offsetSample: 0 };
   private selection: SelectionRange | null = null;
@@ -327,6 +328,7 @@ export class WaverElement extends HTMLElement {
 
   loadSamples(samples: Float32Array, sampleRate: number): void {
     this.samples = samples;
+    this.channelSamples = [];
     this.sampleRate = sampleRate;
     this.selection = null;
     this.cursorSample = 0;
@@ -372,6 +374,14 @@ export class WaverElement extends HTMLElement {
   }
 
   loadAudioBuffer(buffer: AudioBuffer, context: AudioContext): void {
+    // Extract all channels for rendering (stereo support)
+    const channels: Float32Array[] = [];
+    for (let i = 0; i < buffer.numberOfChannels; i++) {
+      channels.push(buffer.getChannelData(i));
+    }
+    this.channelSamples = channels;
+
+    // For waveform rendering: use the first channel (or mix if stereo, for now just use L)
     const mono = buffer.numberOfChannels > 0 ? buffer.getChannelData(0) : new Float32Array(0);
     this.loadSamples(mono, buffer.sampleRate);
     this.audioEngine = new AudioEngine(context, {
@@ -635,6 +645,11 @@ export class WaverElement extends HTMLElement {
 
   getSampleRate(): number {
     return this.sampleRate;
+  }
+
+  /** Number of channels in the currently loaded audio (1 for mono, 2+ for stereo/multichannel). */
+  getChannelCount(): number {
+    return this.channelSamples.length > 0 ? this.channelSamples.length : 1;
   }
 
   /** Current sample buffer — whatever's loaded (file, prior recording) or, mid-recording, what
