@@ -1074,15 +1074,18 @@ function styleSheet(): HTMLStyleElement {
     .waver-action-btn--icon-only span { display: none; }
 
     .waver-cancel-btn {
-      position: absolute; top: 8px; right: 8px; z-index: 6;
+      position: absolute; top: 6px; right: 6px; z-index: 6;
       display: inline-flex; align-items: center; justify-content: center;
-      width: 36px; height: 36px; padding: 0; border-radius: 50%; border: none;
-      background: rgba(0, 0, 0, 0.35); color: #fff; opacity: 0.85; cursor: pointer;
+      width: 20px; height: 20px; padding: 0; border-radius: 50%; border: none;
+      background: transparent; color: inherit; opacity: 0; cursor: pointer;
       transition: opacity 120ms ease, background-color 120ms ease, transform 120ms ease;
     }
-    .waver-cancel-btn:hover:not(:disabled) { opacity: 1; background: rgba(0, 0, 0, 0.5); }
+    .waver-container:hover .waver-cancel-btn { opacity: 0.35; }
+    .waver-container:hover .waver-cancel-btn:disabled { opacity: 0.15; }
+    .waver-cancel-btn:hover:not(:disabled) { opacity: 1; background: rgba(127, 127, 127, 0.15); }
     .waver-cancel-btn:active:not(:disabled) { transform: scale(0.96); }
-    .waver-cancel-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .waver-cancel-btn:disabled { cursor: not-allowed; }
+    .waver-cancel-btn svg { width: 12px; height: 12px; }
 
     .waver-confirm-overlay {
       position: absolute; inset: 0; z-index: 10; display: none;
