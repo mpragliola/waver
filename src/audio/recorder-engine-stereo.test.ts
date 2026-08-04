@@ -164,6 +164,7 @@ describe("RecorderEngine stereo recording", () => {
       // Simulate audio process event with stereo input
       processor.onaudioprocess?.({
         inputBuffer: {
+          length: 2,
           getChannelData: (i: number) => (i === 0 ? leftData : rightData),
         },
       });
@@ -244,6 +245,7 @@ describe("RecorderEngine stereo recording", () => {
 
       processor.onaudioprocess?.({
         inputBuffer: {
+          length: 2,
           getChannelData: (i: number) => (i === 0 ? leftData : rightData),
         },
       });
