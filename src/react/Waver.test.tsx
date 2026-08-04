@@ -101,6 +101,68 @@ describe("React Waver wrapper", () => {
     expect(ref.current?.getSampleRate()).toBe(48000);
   });
 
+  it("exposes getChannels() via the ref", async () => {
+    const ref = createRef<WaverHandle>();
+    const { container } = render(<Waver ref={ref} />);
+    await act(async () => {});
+    const el = container.querySelector("wave-r") as WaverElement;
+
+    expect(ref.current?.getChannels()).toEqual([]);
+
+    const left = new Float32Array([0.1, 0.2]);
+    const right = new Float32Array([0.3, 0.4]);
+    const buffer = {
+      sampleRate: 44100,
+      duration: left.length / 44100,
+      numberOfChannels: 2,
+      length: left.length,
+      getChannelData: (i: number) => (i === 0 ? left : right),
+      copyToChannel: vi.fn(),
+    } as unknown as AudioBuffer;
+    const ctx = makeFakeAudioContext() as unknown as AudioContext;
+
+    act(() => {
+      el.loadAudioBuffer(buffer, ctx);
+    });
+
+    const channels = ref.current?.getChannels();
+    expect(channels).toHaveLength(2);
+    expect(channels?.[0]).toEqual(left);
+    expect(channels?.[1]).toEqual(right);
+  });
+
+  it("fires onLoadSuccess (with fileName) when the element emits waver:loadsuccess", async () => {
+    const onLoadSuccess = vi.fn();
+    const ref = createRef<WaverHandle>();
+    render(<Waver ref={ref} onLoadSuccess={onLoadSuccess} />);
+    await act(async () => {});
+
+    act(() => {
+      ref.current
+        ?.element()
+        ?.dispatchEvent(
+          new CustomEvent("waver:loadsuccess", { detail: { durationSample: 100, sampleRate: 44100, fileName: "test.wav" } })
+        );
+    });
+
+    expect(onLoadSuccess).toHaveBeenCalledWith({ durationSample: 100, sampleRate: 44100, fileName: "test.wav" });
+  });
+
+  it("fires onRecordSuccess when the element emits waver:recordsuccess", async () => {
+    const onRecordSuccess = vi.fn();
+    const ref = createRef<WaverHandle>();
+    render(<Waver ref={ref} onRecordSuccess={onRecordSuccess} />);
+    await act(async () => {});
+
+    act(() => {
+      ref.current
+        ?.element()
+        ?.dispatchEvent(new CustomEvent("waver:recordsuccess", { detail: { durationSample: 200, sampleRate: 48000 } }));
+    });
+
+    expect(onRecordSuccess).toHaveBeenCalledWith({ durationSample: 200, sampleRate: 48000 });
+  });
+
   it("fires onCursorChange when the element emits waver:cursorchange", async () => {
     const onCursorChange = vi.fn();
     const ref = createRef<WaverHandle>();
