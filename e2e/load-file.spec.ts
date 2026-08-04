@@ -8,7 +8,6 @@ const CORRUPT_WAV = path.join(__dirname, "fixtures", "corrupt.wav");
 
 test.describe("loading a file via the built-in Load button", () => {
   test("renders a waveform and clears the status line", async ({ page }) => {
-    await page.goto("/");
     const waver = page.locator("wave-r");
     const fileInput = waver.locator(".waver-file-input");
 
@@ -20,7 +19,6 @@ test.describe("loading a file via the built-in Load button", () => {
   });
 
   test("shows a decode error in the status line for an invalid file", async ({ page }) => {
-    await page.goto("/");
     const waver = page.locator("wave-r");
     const fileInput = waver.locator(".waver-file-input");
 
@@ -46,7 +44,6 @@ test.describe("loading a file via drag-and-drop", () => {
   };
 
   test("loads audio when dropping a single file on the empty component", async ({ page }) => {
-    await page.goto("/");
     const waver = page.locator("wave-r");
 
     // Simulate drag-and-drop of audio file
@@ -58,7 +55,6 @@ test.describe("loading a file via drag-and-drop", () => {
   });
 
   test("shows confirmation dialog when dropping a file over existing audio", async ({ page }) => {
-    await page.goto("/");
     const waver = page.locator("wave-r");
 
     // Load initial audio
@@ -71,7 +67,6 @@ test.describe("loading a file via drag-and-drop", () => {
   });
 
   test("clears and loads new file when clicking 'Clear' in confirmation", async ({ page }) => {
-    await page.goto("/");
     const waver = page.locator("wave-r");
 
     // Load initial audio
@@ -92,7 +87,6 @@ test.describe("loading a file via drag-and-drop", () => {
   });
 
   test("keeps existing audio when clicking 'Keep' in confirmation", async ({ page }) => {
-    await page.goto("/");
     const waver = page.locator("wave-r");
 
     // Load initial audio
@@ -113,7 +107,6 @@ test.describe("loading a file via drag-and-drop", () => {
   });
 
   test("shows decode error for invalid file dropped", async ({ page }) => {
-    await page.goto("/");
 
     await simulateDragDrop(page, CORRUPT_WAV);
 

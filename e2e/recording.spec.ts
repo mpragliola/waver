@@ -4,7 +4,6 @@ import { expect, test } from "@playwright/test";
 // up chromium-only in playwright.config.ts; these specs never run under firefox/webkit projects.
 
 test("recording lifecycle: start shows the timer/stop UI, stop loads captured audio", async ({ page }) => {
-  await page.goto("/");
   const waver = page.locator("wave-r");
 
   await waver.locator(".waver-empty-overlay .waver-action-btn--record").click();
@@ -26,7 +25,6 @@ test("recording lifecycle: start shows the timer/stop UI, stop loads captured au
 });
 
 test("interaction is locked on the waveform while recording", async ({ page }) => {
-  await page.goto("/");
   const waver = page.locator("wave-r");
   await waver.locator(".waver-empty-overlay .waver-action-btn--record").click();
   await expect(waver.locator(".waver-recording-bar")).toBeVisible();
@@ -44,7 +42,6 @@ test("interaction is locked on the waveform while recording", async ({ page }) =
 });
 
 test("Monitor button opens the mic and shows the VU meter without recording", async ({ page }) => {
-  await page.goto("/");
   const waver = page.locator("wave-r");
 
   await page.click("#monitor");
@@ -60,7 +57,6 @@ test("Monitor button opens the mic and shows the VU meter without recording", as
 });
 
 test("clicking Record while monitoring transitions straight to recording", async ({ page }) => {
-  await page.goto("/");
   const waver = page.locator("wave-r");
 
   await page.click("#monitor");
@@ -75,7 +71,6 @@ test("clicking Record while monitoring transitions straight to recording", async
 });
 
 test("recordButton: 'disabled' via configure() prevents starting a recording from the UI", async ({ page }) => {
-  await page.goto("/");
   const waver = page.locator("wave-r");
 
   await page.evaluate(() => {

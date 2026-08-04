@@ -13,7 +13,6 @@ async function loadTone(page: import("@playwright/test").Page) {
 }
 
 test("click-drag on the waveform creates a selection", async ({ page }) => {
-  await page.goto("/");
   await captureWaverEvents(page, ["waver:selectionchanged"]);
   await loadTone(page);
 
@@ -36,7 +35,6 @@ test("click-drag on the waveform creates a selection", async ({ page }) => {
 });
 
 test("clicking the ruler seeks the cursor without creating a selection", async ({ page }) => {
-  await page.goto("/");
   await captureWaverEvents(page, ["waver:cursorchange", "waver:selectionchanged"]);
   await loadTone(page);
 
@@ -51,7 +49,6 @@ test("clicking the ruler seeks the cursor without creating a selection", async (
 });
 
 test("double-click clears an existing selection", async ({ page }) => {
-  await page.goto("/");
   await captureWaverEvents(page, ["waver:selectionreset"]);
   await loadTone(page);
 

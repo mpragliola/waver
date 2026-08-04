@@ -14,7 +14,6 @@ async function loadTone(page: import("@playwright/test").Page) {
 
 test.describe("playback", () => {
   test("Play/Stop toggles playback state, reflected via play/stop events", async ({ page }) => {
-    await page.goto("/");
     await captureWaverEvents(page, ["waver:play", "waver:stop"]);
     await loadTone(page);
 
@@ -28,7 +27,6 @@ test.describe("playback", () => {
 
 test.describe("zoom", () => {
   test("Zoom to full resets the viewport without erroring", async ({ page }) => {
-    await page.goto("/");
     await loadTone(page);
 
     const waveform = page.locator("wave-r").locator(".waver-waveform");
@@ -48,7 +46,6 @@ test.describe("zoom", () => {
 
 test.describe("view mode", () => {
   test("Toggle spectrogram switches view mode and fires viewmodechange", async ({ page }) => {
-    await page.goto("/");
     await captureWaverEvents(page, ["waver:viewmodechange", "waver:spectrogramready"]);
     await loadTone(page);
 

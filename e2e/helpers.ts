@@ -1,4 +1,9 @@
-import type { Page } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect, type Page } from "@playwright/test";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export const TONE_WAV = path.join(__dirname, "fixtures", "tone.wav");
 
 /**
  * Registers listeners for the given `waver:*` events on `#waver` and stashes each detail in
@@ -25,4 +30,16 @@ export async function getCapturedEvents<T = unknown>(page: Page, type: string): 
     const w = window as unknown as { __waverEvents: Record<string, unknown[]> };
     return w.__waverEvents?.[eventType] ?? [];
   }, type) as Promise<T[]>;
+}
+
+export async function loadTone(page: Page): Promise<void> {
+  const waver = page.locator("wave-r");
+  await waver.locator(".waver-file-input").setInputFiles(TONE_WAV);
+  await expect(page.locator("#status")).toHaveText("");
+}
+
+export async function configureWaver(page: Page, options: Record<string, any>): Promise<void> {
+  await page.evaluate((opts) => {
+    (document.getElementById("waver") as any).configure(opts);
+  }, options);
 }
