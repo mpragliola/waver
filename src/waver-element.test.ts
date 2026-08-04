@@ -74,10 +74,10 @@ describe("WaverElement", () => {
       expect(el.isRecording()).toBe(false);
     });
 
-    it("hides the whole empty-overlay only when both buttons are hidden", () => {
+    it("hides the whole empty-overlay only when all three buttons are hidden", () => {
       const el = mount();
       const overlay = el.shadowRoot!.querySelector(".waver-empty-overlay") as HTMLElement;
-      el.configure({ loadButton: "hidden", recordButton: "enabled" });
+      el.configure({ loadButton: "hidden", recordButton: "enabled", monitorButton: "hidden" });
       expect(overlay.style.display).toBe("flex");
       el.configure({ recordButton: "hidden" });
       expect(overlay.style.display).toBe("none");
@@ -841,6 +841,102 @@ describe("WaverElement", () => {
       await el.startRecording();
       el.remove();
       expect(el.isRecording()).toBe(true); // recordingState isn't reset by cancel(), only stopRecording()
+    });
+  });
+
+  describe("monitoring", () => {
+    function stubMicSuccess() {
+      vi.stubGlobal("navigator", {
+        mediaDevices: { getUserMedia: vi.fn(async () => makeFakeMediaStream()) },
+      });
+      vi.stubGlobal(
+        "AudioContext",
+        vi.fn(function () {
+          return makeFakeAudioContext();
+        })
+      );
+    }
+
+    it("startMonitoring() opens the mic, sets isMonitoring() true, and emits monitorstart", async () => {
+      const el = mount();
+      stubMicSuccess();
+      const onStart = vi.fn();
+      el.addEventListener("waver:monitorstart", onStart);
+
+      await el.startMonitoring();
+
+      expect(el.isMonitoring()).toBe(true);
+      expect(el.isRecording()).toBe(false);
+      expect(onStart).toHaveBeenCalledTimes(1);
+    });
+
+    it("stopMonitoring() closes the mic, sets isMonitoring() false, and emits monitorstop", async () => {
+      const el = mount();
+      stubMicSuccess();
+      await el.startMonitoring();
+      const onStop = vi.fn();
+      el.addEventListener("waver:monitorstop", onStop);
+
+      el.stopMonitoring();
+
+      expect(el.isMonitoring()).toBe(false);
+      expect(onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it("clicking Record while monitoring hands off the open stream without a second getUserMedia call", async () => {
+      const el = mount();
+      stubMicSuccess();
+      await el.startMonitoring();
+      const getUserMedia = (navigator as unknown as { mediaDevices: { getUserMedia: ReturnType<typeof vi.fn> } })
+        .mediaDevices.getUserMedia;
+
+      await el.startRecording();
+
+      expect(getUserMedia).toHaveBeenCalledTimes(1);
+      expect(el.isMonitoring()).toBe(false);
+      expect(el.isRecording()).toBe(true);
+    });
+
+    it("reset() stops an active monitoring session", async () => {
+      const el = mount();
+      stubMicSuccess();
+      await el.startMonitoring();
+
+      el.reset();
+
+      expect(el.isMonitoring()).toBe(false);
+    });
+
+    it("monitorButton: 'disabled' prevents startMonitoring() via a click but not via the public API", async () => {
+      const el = mount();
+      stubMicSuccess();
+      el.configure({ monitorButton: "disabled" });
+      const shadow = el.shadowRoot!;
+      const monitorBtn = shadow.querySelector(".waver-action-btn--monitor") as HTMLButtonElement;
+
+      monitorBtn.click();
+      expect(el.isMonitoring()).toBe(false); // click is blocked by disabled state
+
+      await el.startMonitoring(); // public API call, unaffected by button state (mirrors recordButton's existing test)
+      expect(el.isMonitoring()).toBe(true);
+    });
+
+    it("recorderror fires and isMonitoring() stays false when getUserMedia rejects during startMonitoring()", async () => {
+      const el = mount();
+      vi.stubGlobal("navigator", {
+        mediaDevices: {
+          getUserMedia: vi.fn(async () => {
+            throw new DOMException("denied", "NotAllowedError");
+          }),
+        },
+      });
+      const onError = vi.fn();
+      el.addEventListener("waver:recorderror", onError);
+
+      await el.startMonitoring();
+
+      expect(el.isMonitoring()).toBe(false);
+      expect(onError).toHaveBeenCalledTimes(1);
     });
   });
 

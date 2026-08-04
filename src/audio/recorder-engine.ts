@@ -157,6 +157,24 @@ export class RecorderEngine {
     this.context = null;
   }
 
+  /** Releases this engine's processing nodes WITHOUT stopping the stream's tracks, even if this
+   * engine acquired the stream itself. For handing an open stream off to a different RecorderEngine
+   * instance (e.g. monitoring -> recording) without an audible drop or a second permission prompt. */
+  releaseNodesOnly(): void {
+    if (!this.context) return;
+    this.recording = false;
+    this.processor?.disconnect();
+    this.splitterNode?.disconnect();
+    this.sourceNode?.disconnect();
+    this.silentGain?.disconnect();
+    this.processor = null;
+    this.splitterNode = null;
+    this.sourceNode = null;
+    this.silentGain = null;
+    this.stream = null;
+    this.ownsStream = false;
+  }
+
   private releaseCaptureNodes(): void {
     this.processor?.disconnect();
     this.splitterNode?.disconnect();

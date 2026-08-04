@@ -74,6 +74,9 @@ export interface WaverOptions {
    * Use `"disabled"` when several Waver instances share one mic and only one may record at a time.
    */
   recordButton: ControlState;
+  /** State of the built-in "Monitor" button shown while no audio is loaded. Opens the mic and
+   * shows a live level meter without recording; toggled off again by clicking it a second time. */
+  monitorButton: ControlState;
   /** State of the built-in "Cancel" (X) button shown top-right once audio is loaded. Confirms before discarding via reset(). */
   cancelButton: ControlState;
   /**
@@ -123,6 +126,11 @@ export type WaverEventMap = {
   "waver:loop": { positionSample: number };
   /** Fires when the built-in Record button starts a mic capture. */
   "waver:recordstart": Record<string, never>;
+  /** Fires when the built-in Monitor button opens the mic for level metering (not recording). */
+  "waver:monitorstart": Record<string, never>;
+  /** Fires when monitoring stops, whether via the Monitor button, an exit path (reset/Load File/
+   * Escape/disconnect), or a handoff into startRecording(). */
+  "waver:monitorstop": Record<string, never>;
   /** Fires when recording stops, whether or not a file load follows. */
   "waver:recordstop": { positionSample: number };
   /** Fires when starting or running the built-in mic recording fails (e.g. permission denied). */

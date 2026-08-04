@@ -2,7 +2,7 @@ import { AudioEngine } from "./audio/audio-engine";
 import { RecorderEngine } from "./audio/recorder-engine";
 import { GrowableFloat32Buffer } from "./core/growable-buffer";
 import { ensureGoogleFont } from "./core/font-loader";
-import { closeIcon, micIcon, stopIcon, uploadIcon } from "./core/icons";
+import { closeIcon, micIcon, monitorIcon, stopIcon, uploadIcon } from "./core/icons";
 import { createPeaksCache } from "./core/peaks";
 import { normalizeSelection } from "./core/selection";
 import { SpectrogramCache, readVisibleSpectrogramColumns } from "./core/spectrogram-cache";
@@ -45,6 +45,7 @@ const DEFAULT_OPTIONS: WaverOptions = {
   rulerHeight: 16,
   loadButton: "enabled",
   recordButton: "enabled",
+  monitorButton: "enabled",
   hideButtonLabels: false,
   cancelButton: "enabled",
   channelIndex: 0,
@@ -98,27 +99,33 @@ export class WaverElement extends HTMLElement {
   private emptyOverlay: HTMLDivElement;
   private loadButtonEl: HTMLButtonElement;
   private recordButtonEl: HTMLButtonElement;
+  private monitorButtonEl: HTMLButtonElement;
   private cancelButtonEl: HTMLButtonElement;
   private confirmOverlayEl: HTMLDivElement;
   private confirmKeepBtn: HTMLButtonElement;
   private confirmClearBtn: HTMLButtonElement;
   private recordingBar: HTMLDivElement;
   private recordingTimeEl: HTMLSpanElement;
+  private vuMeterEl: HTMLDivElement;
+  private vuMeterFillEl: HTMLDivElement;
   private fileInput: HTMLInputElement;
   private internalAudioContext: AudioContext | null = null;
   private recorderEngine: RecorderEngine | null = null;
+  private monitorEngine: RecorderEngine | null = null;
   /** Set via `inputStream`; used by startRecording() (including the built-in Record button) when
    * called with no explicit stream argument. Lets a host app pick the input device ahead of time
    * without having to intercept every place recording can be triggered. */
   private presetInputStream: MediaStream | null = null;
-  private recordingState: "idle" | "recording" = "idle";
+  private recordingState: "idle" | "monitoring" | "recording" = "idle";
   private recordingBuffer = new GrowableFloat32Buffer();
   private recordingStartedAt = 0;
   private recordingTimerHandle: number | null = null;
   /** Bound instance method (not an inline closure) so it can be removed again in disconnectedCallback()
    * — otherwise this window-level listener would keep the whole WaverElement instance alive forever. */
   private handleEscapeKey = (e: KeyboardEvent): void => {
-    if (e.key === "Escape" && this.confirmOverlayEl.style.display !== "none") this.closeCancelConfirm();
+    if (e.key !== "Escape") return;
+    if (this.confirmOverlayEl.style.display !== "none") this.closeCancelConfirm();
+    else if (this.recordingState === "monitoring") this.stopMonitoring();
   };
 
   private accentTarget: "start" | "end" | null = null;
@@ -188,7 +195,12 @@ export class WaverElement extends HTMLElement {
     this.recordButtonEl.className = "waver-action-btn waver-action-btn--record";
     this.recordButtonEl.setAttribute("aria-label", "Record");
     this.recordButtonEl.innerHTML = `${micIcon}<span>Record</span>`;
-    this.emptyOverlay.append(this.loadButtonEl, this.recordButtonEl);
+    this.monitorButtonEl = document.createElement("button");
+    this.monitorButtonEl.type = "button";
+    this.monitorButtonEl.className = "waver-action-btn waver-action-btn--monitor";
+    this.monitorButtonEl.setAttribute("aria-label", "Monitor");
+    this.monitorButtonEl.innerHTML = `${monitorIcon}<span>Monitor</span>`;
+    this.emptyOverlay.append(this.loadButtonEl, this.monitorButtonEl, this.recordButtonEl);
 
     this.cancelButtonEl = document.createElement("button");
     this.cancelButtonEl.type = "button";
@@ -236,6 +248,12 @@ export class WaverElement extends HTMLElement {
     recordingReadout.append(recordingDot, this.recordingTimeEl);
     this.recordingBar.append(recordingReadout, stopButton);
 
+    this.vuMeterEl = document.createElement("div");
+    this.vuMeterEl.className = "waver-vu-meter";
+    this.vuMeterFillEl = document.createElement("div");
+    this.vuMeterFillEl.className = "waver-vu-meter-fill";
+    this.vuMeterEl.append(this.vuMeterFillEl);
+
     this.fileInput = document.createElement("input");
     this.fileInput.type = "file";
     this.fileInput.accept = "audio/*";
@@ -246,6 +264,7 @@ export class WaverElement extends HTMLElement {
       this.waveStack,
       this.minimapCanvas,
       this.emptyOverlay,
+      this.vuMeterEl,
       this.cancelButtonEl,
       this.confirmOverlayEl,
       this.recordingBar,
@@ -255,11 +274,20 @@ export class WaverElement extends HTMLElement {
 
     this.loadButtonEl.addEventListener("click", () => {
       if (this.opts.loadButton !== "enabled") return;
+      this.stopMonitoring();
       this.fileInput.click();
     });
     this.recordButtonEl.addEventListener("click", () => {
       if (this.opts.recordButton !== "enabled") return;
       void this.startRecording();
+    });
+    this.monitorButtonEl.addEventListener("click", () => {
+      if (this.opts.monitorButton !== "enabled") return;
+      if (this.recordingState === "monitoring") {
+        this.stopMonitoring();
+      } else {
+        void this.startMonitoring();
+      }
     });
     stopButton.addEventListener("click", () => this.stopRecording());
     this.cancelButtonEl.addEventListener("click", () => {
@@ -308,6 +336,7 @@ export class WaverElement extends HTMLElement {
     this.resizeObserver?.disconnect();
     this.audioEngine?.dispose();
     this.recorderEngine?.cancel();
+    this.monitorEngine?.cancel();
     this.stopRecordingTimerDisplay();
     this.spectrogramCache.dispose();
     window.removeEventListener("keydown", this.handleEscapeKey);
@@ -342,6 +371,11 @@ export class WaverElement extends HTMLElement {
       this.recorderEngine = null;
       this.recordingState = "idle";
       this.stopRecordingTimerDisplay();
+    } else if (this.recordingState === "monitoring") {
+      this.monitorEngine?.cancel();
+      this.monitorEngine = null;
+      this.recordingState = "idle";
+      this.resetVuMeter();
     }
     if (this.raf !== null) {
       cancelAnimationFrame(this.raf);
@@ -428,6 +462,57 @@ export class WaverElement extends HTMLElement {
     return this.recordingState === "recording";
   }
 
+  isMonitoring(): boolean {
+    return this.recordingState === "monitoring";
+  }
+
+  /**
+   * Opens the mic and starts live level metering, without capturing samples. Same stream/
+   * channelIndex conventions as startRecording(): pass an explicit MediaStream to monitor a
+   * specific device, or omit to use the stream set via setInputStream(), falling back to the
+   * default mic via getUserMedia.
+   */
+  async startMonitoring(stream?: MediaStream, channelIndex?: number): Promise<void> {
+    if (this.recordingState !== "idle") return;
+
+    const engine = new RecorderEngine({ onLevel: (db) => this.updateVuMeter(db) });
+    try {
+      await engine.startMonitoring(stream ?? this.presetInputStream ?? undefined, channelIndex ?? this.opts.channelIndex);
+    } catch (err) {
+      this.emit("waver:recorderror", { error: err as Error });
+      return;
+    }
+
+    this.monitorEngine = engine;
+    this.recordingState = "monitoring";
+    this.updateOverlay();
+    this.emit("waver:monitorstart", {});
+  }
+
+  /** Closes the mic and stops metering. No-op if not monitoring. */
+  stopMonitoring(): void {
+    if (this.recordingState !== "monitoring" || !this.monitorEngine) return;
+    this.monitorEngine.cancel();
+    this.monitorEngine = null;
+    this.recordingState = "idle";
+    this.resetVuMeter();
+    this.updateOverlay();
+    this.emit("waver:monitorstop", {});
+  }
+
+  private updateVuMeter(db: number): void {
+    const clamped = Math.max(-60, Math.min(0, db));
+    const pct = ((clamped + 60) / 60) * 100;
+    this.vuMeterFillEl.style.height = `${pct}%`;
+    this.vuMeterFillEl.classList.toggle("waver-vu-meter-fill--warn", db >= -12 && db < -3);
+    this.vuMeterFillEl.classList.toggle("waver-vu-meter-fill--clip", db >= -3);
+  }
+
+  private resetVuMeter(): void {
+    this.vuMeterFillEl.style.height = "0%";
+    this.vuMeterFillEl.classList.remove("waver-vu-meter-fill--warn", "waver-vu-meter-fill--clip");
+  }
+
   /**
    * Starts capture. Pass a `MediaStream` to record from it directly (a specific device the host
    * app already picked, a WebRTC remote track, a screen-share audio track, etc.) — Waver has no
@@ -439,9 +524,19 @@ export class WaverElement extends HTMLElement {
   async startRecording(stream?: MediaStream, channelIndex?: number): Promise<void> {
     if (this.recordingState === "recording") return;
 
+    let handoffStream = stream;
+    if (this.recordingState === "monitoring" && this.monitorEngine) {
+      handoffStream = handoffStream ?? this.monitorEngine.getStream() ?? undefined;
+      this.monitorEngine.releaseNodesOnly(); // keeps tracks alive for the new engine
+      this.monitorEngine = null;
+      this.recordingState = "idle";
+      this.resetVuMeter();
+      this.emit("waver:monitorstop", {});
+    }
+
     const engine = new RecorderEngine({ onData: (chunk) => this.appendRecordedChunk(chunk) });
     try {
-      await engine.start(stream ?? this.presetInputStream ?? undefined, channelIndex ?? this.opts.channelIndex);
+      await engine.start(handoffStream ?? this.presetInputStream ?? undefined, channelIndex ?? this.opts.channelIndex);
     } catch (err) {
       this.emit("waver:recorderror", { error: err as Error });
       return;
@@ -545,14 +640,20 @@ export class WaverElement extends HTMLElement {
     const showButtons = !this.hasAudio() && this.recordingState !== "recording";
     const loadVisible = showButtons && this.opts.loadButton !== "hidden";
     const recordVisible = showButtons && this.opts.recordButton !== "hidden";
+    const monitorVisible = showButtons && this.opts.monitorButton !== "hidden";
     this.loadButtonEl.style.display = loadVisible ? "" : "none";
     this.recordButtonEl.style.display = recordVisible ? "" : "none";
+    this.monitorButtonEl.style.display = monitorVisible ? "" : "none";
     this.loadButtonEl.disabled = this.opts.loadButton === "disabled";
     this.recordButtonEl.disabled = this.opts.recordButton === "disabled";
+    this.monitorButtonEl.disabled = this.opts.monitorButton === "disabled";
     this.loadButtonEl.classList.toggle("waver-action-btn--icon-only", this.opts.hideButtonLabels);
     this.recordButtonEl.classList.toggle("waver-action-btn--icon-only", this.opts.hideButtonLabels);
-    this.emptyOverlay.style.display = loadVisible || recordVisible ? "flex" : "none";
+    this.monitorButtonEl.classList.toggle("waver-action-btn--icon-only", this.opts.hideButtonLabels);
+    this.monitorButtonEl.classList.toggle("waver-action-btn--active", this.recordingState === "monitoring");
+    this.emptyOverlay.style.display = loadVisible || recordVisible || monitorVisible ? "flex" : "none";
     this.recordingBar.style.display = this.recordingState === "recording" ? "flex" : "none";
+    this.vuMeterEl.style.display = this.recordingState === "monitoring" ? "block" : "none";
 
     const cancelVisible = this.hasAudio() && this.recordingState !== "recording" && this.opts.cancelButton !== "hidden";
     this.cancelButtonEl.style.display = cancelVisible ? "" : "none";

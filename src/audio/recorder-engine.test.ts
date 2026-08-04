@@ -405,5 +405,18 @@ describe("RecorderEngine", () => {
       const splitter = ctx.createChannelSplitter.mock.results[0].value as FakeSplitterNode;
       expect(splitter.connect).toHaveBeenCalledWith(ctx.createScriptProcessor.mock.results[0].value, 1);
     });
+
+    it("releaseNodesOnly() disconnects nodes without stopping tracks, even for a self-acquired stream", async () => {
+      const engine = new RecorderEngine();
+      await engine.startMonitoring(); // no explicit stream -> acquired via getUserMedia -> ownsStream is true
+      const ctx = contexts[0];
+      const processor = ctx.createScriptProcessor.mock.results[0].value as FakeProcessor;
+
+      engine.releaseNodesOnly();
+
+      expect(processor.disconnect).toHaveBeenCalled();
+      tracks.forEach((t) => expect(t.stop).not.toHaveBeenCalled());
+      expect(engine.getStream()).toBeNull();
+    });
   });
 });
