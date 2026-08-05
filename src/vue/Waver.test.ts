@@ -184,7 +184,7 @@ describe("Vue Waver wrapper", () => {
     exposed(wrapper).loadSamples(new Float32Array(1000), 44100);
     exposed(wrapper).setSelection({ startSample: 10, endSample: 20 });
 
-    expect(wrapper.emitted("selectionchange")).toEqual([[{ startSample: 10, endSample: 20 }]]);
+    expect(wrapper.emitted("selectionchange")).toEqual([[{ startSample: 10, endSample: 20 }, true]]);
   });
 
   it("emits recorderror when mic access is denied", async () => {

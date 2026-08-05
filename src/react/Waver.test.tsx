@@ -254,7 +254,7 @@ describe("React Waver wrapper", () => {
       ref.current?.setSelection({ startSample: 10, endSample: 20 });
     });
 
-    expect(onSelectionChange).toHaveBeenCalledWith({ startSample: 10, endSample: 20 });
+    expect(onSelectionChange).toHaveBeenCalledWith({ startSample: 10, endSample: 20 }, true);
   });
 
   it("fires onRecordError when mic access is denied", async () => {

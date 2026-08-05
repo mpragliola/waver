@@ -43,7 +43,7 @@ export interface WaverProps extends Partial<WaverOptions> {
    * an input device on its own. */
   inputStream?: MediaStream | null;
   onCursorChange?: (positionSample: number) => void;
-  onSelectionChange?: (selection: SelectionRange | null) => void;
+  onSelectionChange?: (selection: SelectionRange | null, final: boolean) => void;
   onZoomChange?: (zoom: ZoomState) => void;
   onPlay?: (positionSample: number) => void;
   onStop?: (positionSample: number) => void;
@@ -140,7 +140,7 @@ export const Waver = forwardRef<WaverHandle, WaverProps>(function Waver(props, r
 
     const handlers: Array<[string, EventListener]> = [
       ["waver:cursorchange", ((e: CustomEvent) => onCursorChange?.(e.detail.positionSample)) as EventListener],
-      ["waver:selectionchange", ((e: CustomEvent) => onSelectionChange?.(e.detail.selection)) as EventListener],
+      ["waver:selectionchange", ((e: CustomEvent) => onSelectionChange?.(e.detail.selection, e.detail.final)) as EventListener],
       ["waver:zoomchange", ((e: CustomEvent) => onZoomChange?.(e.detail.zoom)) as EventListener],
       ["waver:play", ((e: CustomEvent) => onPlay?.(e.detail.positionSample)) as EventListener],
       ["waver:stop", ((e: CustomEvent) => onStop?.(e.detail.positionSample)) as EventListener],

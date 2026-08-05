@@ -118,6 +118,9 @@ export interface SelectionEventDetail {
   startSample: number | null;
   endSample: number | null;
   durationSample: number | null;
+  /** True when this update is settled (drag end, or a non-drag `setSelection` call) rather
+   * than an intermediate tick of an in-progress drag. */
+  final: boolean;
 }
 
 export type WaverEventMap = {

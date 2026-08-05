@@ -324,7 +324,11 @@ export class WaverElement extends HTMLElement {
       getSelection: () => this.selection,
       getTotalSamples: () => this.samples.length,
       setSelection: (s, final) => this.setSelection(s, final),
-      commitSelection: () => this.commitSelection(),
+      // Re-runs through setSelection (rather than calling commitSelection() directly) so the
+      // drag-end tick also emits waver:selectionchange with final: true — the single event a
+      // consumer can listen to for "this update is settled", instead of needing to separately
+      // wire selectionchanged/selectionreset just to catch the end of a drag.
+      commitSelection: () => this.setSelection(this.selection, true),
       setCursor: (sample) => this.seekTo(sample),
     });
 
@@ -742,23 +746,24 @@ export class WaverElement extends HTMLElement {
   setSelection(selection: SelectionRange | null, final = true): void {
     this.selection = selection ? normalizeSelection(selection) : null;
     this.audioEngine?.setLoopRange(this.selection);
-    this.emit("waver:selectionchange", this.selectionDetail());
+    this.emit("waver:selectionchange", this.selectionDetail(final));
     if (final) this.commitSelection();
     this.render();
   }
 
   /** Emits the settled `selectionchanged`/`selectionreset` event for the current selection, without altering it. */
   private commitSelection(): void {
-    const detail = this.selectionDetail();
+    const detail = this.selectionDetail(true);
     this.emit(this.selection === null ? "waver:selectionreset" : "waver:selectionchanged", detail);
   }
 
-  private selectionDetail(): SelectionEventDetail {
+  private selectionDetail(final: boolean): SelectionEventDetail {
     return {
       selection: this.selection,
       startSample: this.selection?.startSample ?? null,
       endSample: this.selection?.endSample ?? null,
       durationSample: this.selection ? this.selection.endSample - this.selection.startSample : null,
+      final,
     };
   }
 

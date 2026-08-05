@@ -47,7 +47,7 @@ export const Waver = defineComponent({
   },
   emits: {
     cursorchange: (_positionSample: number) => true,
-    selectionchange: (_selection: SelectionRange | null) => true,
+    selectionchange: (_selection: SelectionRange | null, _final: boolean) => true,
     zoomchange: (_zoom: ZoomState) => true,
     play: (_positionSample: number) => true,
     stop: (_positionSample: number) => true,
@@ -69,7 +69,7 @@ export const Waver = defineComponent({
 
     const listeners: Array<[string, EventListener]> = [
       ["waver:cursorchange", ((e: CustomEvent) => emit("cursorchange", e.detail.positionSample)) as EventListener],
-      ["waver:selectionchange", ((e: CustomEvent) => emit("selectionchange", e.detail.selection)) as EventListener],
+      ["waver:selectionchange", ((e: CustomEvent) => emit("selectionchange", e.detail.selection, e.detail.final)) as EventListener],
       ["waver:zoomchange", ((e: CustomEvent) => emit("zoomchange", e.detail.zoom)) as EventListener],
       ["waver:play", ((e: CustomEvent) => emit("play", e.detail.positionSample)) as EventListener],
       ["waver:stop", ((e: CustomEvent) => emit("stop", e.detail.positionSample)) as EventListener],
